@@ -19,8 +19,6 @@ from .const import (
     PRESETS,
 )
 
-SELECT_ENTITY_ID_FORMAT = DOMAIN + "_preset_{}"
-
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -72,9 +70,11 @@ class ZonePresetSelect(SelectEntity):
         friendly_part = underlying_entity_id.split(".", 1)[-1].replace("_", " ").title()
         self._attr_name = f"{thermostat_name} - {friendly_part} Preset"
         self._attr_unique_id = f"{coordinator.entry_id}_preset_{underlying_entity_id}"
+        # Extract zone name from entity_id (e.g., "climate.office" -> "office")
+        zone_name = underlying_entity_id.split(".")[-1]
         self.entity_id = async_generate_entity_id(
-            SELECT_ENTITY_ID_FORMAT,
-            f"{thermostat_name}_{underlying_entity_id}",
+            "select.{}",
+            f"{thermostat_name}_{zone_name}_preset",
             hass=coordinator.hass,
         )
         self._attr_current_option = default_preset
