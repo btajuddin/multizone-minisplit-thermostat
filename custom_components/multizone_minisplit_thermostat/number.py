@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTemperature
+from homeassistant.const import EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import async_generate_entity_id
@@ -113,6 +113,7 @@ class ZonePriorityNumber(NumberEntity):
     """Number entity for controlling a zone's priority."""
 
     _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
     _attr_native_min_value = 0
     _attr_native_max_value = 100
     _attr_native_step = 1
