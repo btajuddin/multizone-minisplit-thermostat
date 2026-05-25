@@ -40,3 +40,5 @@ DEFAULT_PRIORITY = 0
 
 # Auto mode control
 TEMPERATURE_TOLERANCE = 1.0  # degrees F before triggering mode change
+
+AUTOMATIC_MODE_COOLDOWN = 300  # 5 minutes in seconds

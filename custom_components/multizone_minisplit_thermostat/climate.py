@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from statistics import mean
 from typing import Any
 
@@ -41,6 +42,7 @@ from .const import (
     DOMAIN,
     PRESET_COMFORT,
     PRESETS,
+    AUTOMATIC_MODE_COOLDOWN,
     TEMPERATURE_TOLERANCE,
 )
 
@@ -81,6 +83,7 @@ class MiniSplitThermostatCoordinator:
         self._thermostat_entity: MultiZoneMinisplitThermostat | None = None
         self._select_entities: list["ZonePresetSelect"] = []
         self._remove_trackers: list[CALLBACK_TYPE] = []
+        self._last_auto_mode_change: float = 0.0
 
         # Initialize default presets from config
         for zone_config in zone_configs:
@@ -136,6 +139,7 @@ class MiniSplitThermostatCoordinator:
         self._hvac_mode = mode
         if mode == HVACMode.OFF:
             self._auto_mode = False
+        self._last_auto_mode_change = time.time()
         self._notify_state_changed()
 
     def _get_heat_target(self, entity_id: str) -> float:
@@ -235,6 +239,15 @@ class MiniSplitThermostatCoordinator:
 
     async def async_check_and_update_mode(self) -> None:
         """Check if HVAC mode needs to change and apply it if so."""
+        elapsed = time.time() - self._last_auto_mode_change
+        if elapsed < AUTOMATIC_MODE_COOLDOWN:
+            remaining = AUTOMATIC_MODE_COOLDOWN - elapsed
+            _LOGGER.debug(
+                "Skipping auto mode check, %d seconds remaining in cooldown",
+                int(remaining),
+            )
+            return
+
         determined_mode = self.determine_hvac_mode()
         if determined_mode is None:
             return
@@ -265,6 +278,7 @@ class MiniSplitThermostatCoordinator:
                 {"entity_id": entity_id, "temperature": target_temp},
             )
 
+        self._last_auto_mode_change = time.time()
         self._notify_state_changed()
 
     def setup_state_listeners(self) -> None:
