@@ -177,6 +177,21 @@ class MiniSplitThermostatCoordinator:
         preset_config = self._preset_configs.get(preset, {})
         return preset_config.get("cool_temp", DEFAULT_COOL_TEMP)
 
+    def get_zone_priority(self, entity_id: str) -> int:
+        """Get the priority for a specific zone."""
+        for zone_config in self.zone_configs:
+            if zone_config[CONF_ENTITY_ID] == entity_id:
+                return zone_config.get(CONF_PRIORITY, DEFAULT_PRIORITY)
+        return DEFAULT_PRIORITY
+
+    async def async_set_zone_priority(self, entity_id: str, priority: int) -> None:
+        """Set the priority for a specific zone."""
+        for zone_config in self.zone_configs:
+            if zone_config[CONF_ENTITY_ID] == entity_id:
+                zone_config[CONF_PRIORITY] = priority
+                self._notify_state_changed()
+                return
+
     def get_target_temp(self, entity_id: str) -> float:
         """Get the target temperature for a zone based on its preset and current mode."""
         if self._hvac_mode == HVACMode.HEAT:

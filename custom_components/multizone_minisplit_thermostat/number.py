@@ -11,6 +11,10 @@ from homeassistant.helpers.entity import async_generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
+    CONF_ENTITY_ID,
+    CONF_PRIORITY,
+    CONF_ZONES,
+    DEFAULT_PRIORITY,
     DOMAIN,
     PRESETS,
 )
@@ -33,6 +37,7 @@ async def async_setup_entry(
 
     entities = []
 
+    # Create preset temperature numbers
     for preset in PRESETS:
         for mode in ("heat", "cool"):
             number_entity = PresetTemperatureNumber(
@@ -42,6 +47,16 @@ async def async_setup_entry(
             )
             coordinator.add_number_entity(number_entity)
             entities.append(number_entity)
+
+    # Create zone priority numbers
+    for zone_config in coordinator.zone_configs:
+        entity_id = zone_config[CONF_ENTITY_ID]
+        priority_entity = ZonePriorityNumber(
+            coordinator=coordinator,
+            entity_id=entity_id,
+        )
+        coordinator.add_number_entity(priority_entity)
+        entities.append(priority_entity)
 
     async_add_entities(entities)
 
@@ -92,3 +107,44 @@ class PresetTemperatureNumber(NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Update the target temperature."""
         await self.coordinator.async_set_preset_temp(self._preset, self._mode, value)
+
+
+class ZonePriorityNumber(NumberEntity):
+    """Number entity for controlling a zone's priority."""
+
+    _attr_has_entity_name = True
+    _attr_native_min_value = 0
+    _attr_native_max_value = 100
+    _attr_native_step = 1
+    _attr_mode = NumberMode.BOX
+
+    def __init__(
+        self,
+        coordinator: MiniSplitThermostatCoordinator,
+        entity_id: str,
+    ) -> None:
+        """Initialize the priority number entity."""
+        self.coordinator = coordinator
+        self._entity_id = entity_id
+
+        # Create friendly name like "Office Priority"
+        zone_name = entity_id.split(".")[-1].replace("_", " ").title()
+        self._attr_name = f"{zone_name} Priority"
+        self._attr_unique_id = f"{coordinator.entry_id}_priority_{entity_id}"
+        self.entity_id = async_generate_entity_id(
+            "number.{}",
+            f"{coordinator.entry_name}_{zone_name}_priority",
+            hass=coordinator.hass,
+        )
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.entry_id)},
+        )
+
+    @property
+    def native_value(self) -> int:
+        """Return the current priority."""
+        return self.coordinator.get_zone_priority(self._entity_id)
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Update the priority."""
+        await self.coordinator.async_set_zone_priority(self._entity_id, int(value))

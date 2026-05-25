@@ -18,6 +18,7 @@ This integration creates three types of entities, all grouped under a single dev
 1. **Mode select** - controls HVAC mode (heat/cool/off) for all zones
 2. **Select entities** (one per zone) - control the active preset for each individual zone
 3. **Number entities** (one per preset × mode) - configure heating and cooling target temperatures
+4. **Number entities** (one per zone) - configure zone priority for mode conflict resolution
 
 Temperature targets are derived from the global preset configuration and the currently active preset for each zone.
 
@@ -141,6 +142,13 @@ Six number entities are created (one for each preset × mode combination):
 - **Range**: 40°F to 95°F, step 1°F
 - **Purpose**: Configure the target temperatures for each preset globally
 
+### Number Entities (Zone Priority)
+
+One number entity is created per zone for adjusting zone priority:
+- **Names**: `{Zone Name} Priority`
+- **Range**: 0 to 100, step 1
+- **Purpose**: Adjust zone priority for automatic mode conflict resolution (higher = more important)
+
 ## Services
 
 ### `multizone_minisplit_thermostat.set_zone_preset`
@@ -181,6 +189,11 @@ Set the preset for a specific zone (alternative to using the select entity).
 │   │  Number: Eco Cooling Target → 78°F        │ │
 │   │  Number: Failsafe Heating Target → 60°F   │ │
 │   │  Number: Failsafe Cooling Target → 85°F   │ │
+│   └───────────────────────────────────────────┘ │
+│   ┌───────────────────────────────────────────┐ │
+│   │  Number: Server Room Priority → 100       │ │
+│   │  Number: Living Room Priority → 10        │ │
+│   │  Number: Bedroom Priority → 0             │ │
 │   └───────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────┘
 ```
