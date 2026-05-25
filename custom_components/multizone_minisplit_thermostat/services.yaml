@@ -1,0 +1,23 @@
+set_entity_preset:
+  name: Set Entity Preset
+  description: Set the preset for a specific underlying climate entity.
+  fields:
+    entity:
+      name: Entity
+      description: The underlying climate entity ID to set the preset for.
+      required: true
+      example: "climate.living_room_minisplit"
+      selector:
+        entity:
+          domain: climate
+    preset:
+      name: Preset
+      description: The preset to apply (comfort, eco, or failsafe).
+      required: true
+      example: "comfort"
+      selector:
+        select:
+          options:
+            - comfort
+            - eco
+            - failsafe
