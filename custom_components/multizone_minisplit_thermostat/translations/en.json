@@ -57,6 +57,36 @@
       "invalid_config": "Invalid configuration"
     }
   },
+  "options": {
+    "step": {
+      "manage_zones": {
+        "title": "Manage Zones",
+        "description": "Current zones ({zone_count}):\n{zones}\n\nChoose an action:",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "add_zone": {
+        "title": "Add Climate Zone",
+        "description": "Add a climate zone to this thermostat group.",
+        "data": {
+          "entity_id": "Climate Zone Entity ID",
+          "default_preset": "Default Preset",
+          "priority": "Zone Priority (higher = more important for mode decisions)"
+        }
+      },
+      "remove_zone": {
+        "title": "Remove Zone",
+        "description": "Select a zone to remove from this thermostat group.",
+        "data": {
+          "zone_index": "Zone to remove"
+        }
+      }
+    },
+    "error": {
+      "already_added": "This zone is already added to the thermostat group."
+    }
+  },
   "services": {
     "set_zone_preset": {
       "name": "Set Zone Preset",

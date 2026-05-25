@@ -189,44 +189,46 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
     async def async_step_manage_zones(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Manage zones list."""
+        """Manage zones - show summary and actions."""
         merged = {**self.config_entry.data, **self.config_entry.options}
         if not self._zones:
             self._zones = [dict(z) for z in merged.get(CONF_ZONES, [])]
 
-        if not self._zones:
-            return await self.async_step_add_zone()
-
-        return self.async_show_menu(
-            step_id="manage_zones",
-            menu_options=["add_zone", "remove_zone", "finalize"],
-        )
-
-    async def async_step_remove_zone(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Remove a zone."""
-        import logging
-        _LOGGER = logging.getLogger(__name__)
-
+        errors: dict[str, str] = {}
         if user_input is not None:
-            index = user_input.get("zone_index")
-            if index is not None and 0 <= index < len(self._zones):
-                removed = self._zones.pop(int(index))
-                _LOGGER.info("Removed zone: %s", removed[CONF_ENTITY_ID])
-            return await self.async_step_manage_zones()
+            action = user_input.get("action")
+            if action == "add":
+                return await self.async_step_add_zone()
+            elif action == "remove":
+                return await self.async_step_remove_zone()
+            return await self.async_step_finalize()
 
-        zone_options = {}
-        for i, zone in enumerate(self._zones):
+        # Build zone summary for description
+        zone_names = []
+        for zone in self._zones:
             entity_id = zone[CONF_ENTITY_ID]
             friendly = entity_id.split(".")[-1].replace("_", " ").title()
-            zone_options[str(i)] = friendly
+            zone_names.append(f"- {friendly}")
+        zone_summary = "\n".join(zone_names) if zone_names else "No zones configured"
 
         return self.async_show_form(
-            step_id="remove_zone",
+            step_id="manage_zones",
             data_schema=vol.Schema({
-                vol.Required("zone_index"): vol.In(zone_options),
+                vol.Required("action"): selector({
+                    "select": {
+                        "options": [
+                            {"value": "add", "label": "Add a zone"},
+                            {"value": "remove", "label": "Remove a zone"},
+                            {"value": "done", "label": "Done"},
+                        ],
+                    }
+                }),
             }),
+            description_placeholders={
+                "zone_count": str(len(self._zones)),
+                "zones": zone_summary,
+            },
+            errors=errors,
         )
 
     async def async_step_add_zone(
@@ -252,6 +254,29 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
             step_id="add_zone",
             data_schema=STEP_ADD_ZONE_SCHEMA,
             errors=errors,
+        )
+
+    async def async_step_remove_zone(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Remove a zone."""
+        if user_input is not None:
+            index = user_input.get("zone_index")
+            if index is not None and 0 <= index < len(self._zones):
+                removed = self._zones.pop(int(index))
+            return await self.async_step_manage_zones()
+
+        zone_options = {}
+        for i, zone in enumerate(self._zones):
+            entity_id = zone[CONF_ENTITY_ID]
+            friendly = entity_id.split(".")[-1].replace("_", " ").title()
+            zone_options[str(i)] = friendly
+
+        return self.async_show_form(
+            step_id="remove_zone",
+            data_schema=vol.Schema({
+                vol.Required("zone_index"): vol.In(zone_options),
+            }),
         )
 
     async def async_step_finalize(
