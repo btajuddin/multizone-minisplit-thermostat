@@ -10,7 +10,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.selector import selector
 
 from .const import (
     CONF_DEFAULT_PRESET,
@@ -28,9 +28,13 @@ STEP_USER_DATA_SCHEMA = vol.Schema({
 })
 
 STEP_ADD_ZONE_SCHEMA = vol.Schema({
-    vol.Required(CONF_ENTITY_ID): str,
-    vol.Optional(CONF_DEFAULT_PRESET, default="comfort"): vol.In(PRESETS),
-    vol.Optional(CONF_PRIORITY, default=DEFAULT_PRIORITY): int,
+    vol.Required(CONF_ENTITY_ID): selector({"entity": {"domain": "climate"}}),
+    vol.Optional(CONF_DEFAULT_PRESET, default="comfort"): selector({
+        "select": {"options": PRESETS}
+    }),
+    vol.Optional(CONF_PRIORITY, default=DEFAULT_PRIORITY): selector({
+        "number": {"min": 0, "max": 100, "step": 1, "mode": "box"}
+    }),
 })
 
 
@@ -127,7 +131,7 @@ class MultizoneMinisplitThermostatFlowHandler(
             return self.async_show_form(
                 step_id="add_zone_confirm",
                 data_schema=vol.Schema({
-                    vol.Optional("add_another", default=False): bool,
+                    vol.Optional("add_another", default=False): selector({"boolean": {}}),
                 }),
             )
 
