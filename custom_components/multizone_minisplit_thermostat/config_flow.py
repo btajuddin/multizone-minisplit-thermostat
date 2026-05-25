@@ -168,7 +168,7 @@ class MultizoneMinisplitThermostatFlowHandler(
         config_entry: ConfigEntry,
     ) -> MultizoneMinisplitThermostatOptionsFlowHandler:
         """Get the options flow for this handler."""
-        return MultizoneMinisplitThermostatOptionsFlowHandler(config_entry)
+        return MultizoneMinisplitThermostatOptionsFlowHandler()
 
 
 class MultizoneMinisplitThermostatOptionsFlowHandler(
@@ -176,9 +176,8 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
 ):
     """Handle options flow for reconfiguring the integration."""
 
-    def __init__(self, config_entry: ConfigEntry) -> None:
+    def __init__(self) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
         self._zones: list[dict[str, Any]] = []
 
     async def async_step_init(
