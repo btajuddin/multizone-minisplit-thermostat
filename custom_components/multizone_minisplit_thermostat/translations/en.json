@@ -35,10 +35,22 @@
         "data": {
           "add_another": "Add another zone"
         }
+      },
+      "remove_zone": {
+        "title": "Remove Zone",
+        "description": "Select a zone to remove from the thermostat group.",
+        "data": {
+          "zone_index": "Zone to Remove"
+        }
+      },
+      "manage_zones": {
+        "title": "Manage Zones",
+        "description": "Manage the zones in this thermostat group. Current zones: {zone_count}"
       }
     },
     "error": {
-      "invalid_zone": "Invalid climate entity ID"
+      "invalid_zone": "Invalid climate entity ID",
+      "already_added": "This entity is already added to the zones list"
     },
     "abort": {
       "already_configured": "This thermostat is already configured",

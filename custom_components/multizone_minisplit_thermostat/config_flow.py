@@ -8,6 +8,7 @@ import uuid
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.selector import selector
@@ -158,5 +159,108 @@ class MultizoneMinisplitThermostatFlowHandler(
                 CONF_NAME: self._name or "Multi-Zone Thermostat",
                 CONF_ZONES: self._zones,
                 CONF_PRESET_CONFIGS: self._preset_configs,
+            },
+        )
+
+    @staticmethod
+    @config_entries.HANDLERS.register(DOMAIN)
+    def async_get_options_flow(
+        config_entry: ConfigEntry,
+    ) -> MultizoneMinisplitThermostatOptionsFlowHandler:
+        """Get the options flow for this handler."""
+        return MultizoneMinisplitThermostatOptionsFlowHandler(config_entry)
+
+
+class MultizoneMinisplitThermostatOptionsFlowHandler(
+    config_entries.OptionsFlow,
+):
+    """Handle options flow for reconfiguring the integration."""
+
+    def __init__(self, config_entry: ConfigEntry) -> None:
+        """Initialize options flow."""
+        self.config_entry = config_entry
+        self._zones: list[dict[str, Any]] = []
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage options."""
+        return await self.async_step_manage_zones()
+
+    async def async_step_manage_zones(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage zones list."""
+        merged = {**self.config_entry.data, **self.config_entry.options}
+        if not self._zones:
+            self._zones = [dict(z) for z in merged.get(CONF_ZONES, [])]
+
+        if not self._zones:
+            return await self.async_step_add_zone()
+
+        return self.async_show_menu(
+            step_id="manage_zones",
+            menu_options=["add_zone", "remove_zone", "finalize"],
+        )
+
+    async def async_step_remove_zone(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Remove a zone."""
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+
+        if user_input is not None:
+            index = user_input.get("zone_index")
+            if index is not None and 0 <= index < len(self._zones):
+                removed = self._zones.pop(int(index))
+                _LOGGER.info("Removed zone: %s", removed[CONF_ENTITY_ID])
+            return await self.async_step_manage_zones()
+
+        zone_options = {}
+        for i, zone in enumerate(self._zones):
+            entity_id = zone[CONF_ENTITY_ID]
+            friendly = entity_id.split(".")[-1].replace("_", " ").title()
+            zone_options[str(i)] = friendly
+
+        return self.async_show_form(
+            step_id="remove_zone",
+            data_schema=vol.Schema({
+                vol.Required("zone_index"): vol.In(zone_options),
+            }),
+        )
+
+    async def async_step_add_zone(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Add a new zone."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            entity_id = user_input[CONF_ENTITY_ID]
+            if entity_id in [z[CONF_ENTITY_ID] for z in self._zones]:
+                errors[CONF_ENTITY_ID] = "already_added"
+            else:
+                zone_config = {
+                    CONF_ENTITY_ID: entity_id,
+                    CONF_DEFAULT_PRESET: user_input.get(CONF_DEFAULT_PRESET, "comfort"),
+                    CONF_PRIORITY: user_input.get(CONF_PRIORITY, DEFAULT_PRIORITY),
+                }
+                self._zones.append(zone_config)
+                return await self.async_step_manage_zones()
+
+        return self.async_show_form(
+            step_id="add_zone",
+            data_schema=STEP_ADD_ZONE_SCHEMA,
+            errors=errors,
+        )
+
+    async def async_step_finalize(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Finalize and save options."""
+        return self.async_create_entry(
+            data={
+                CONF_ZONES: self._zones,
             },
         )

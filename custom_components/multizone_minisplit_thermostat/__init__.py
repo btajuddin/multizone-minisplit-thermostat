@@ -66,6 +66,11 @@ CONFIG_SCHEMA = vol.Schema(
 _coordinators: dict[str, MiniSplitThermostatCoordinator] = {}
 
 
+async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Handle options update."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
 def _register_coordinator(coordinator: MiniSplitThermostatCoordinator) -> None:
     """Register a coordinator for service lookups."""
     _coordinators[coordinator.entry_id] = coordinator
@@ -114,13 +119,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Multi-Zone Mini-Split Thermostat from a config entry."""
-    from .coordinator import MiniSplitThermostatCoordinator
-
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = entry.data
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
-    zone_configs = entry.data.get(CONF_ZONES, [])
-    preset_configs = entry.data.get(CONF_PRESET_CONFIGS, {})
+    # Merge entry.options (from reconfiguration) with entry.data (from initial setup)
+    merged_data = {**entry.data, **entry.options}
+    zone_configs = merged_data.get(CONF_ZONES, [])
+    preset_configs = merged_data.get(CONF_PRESET_CONFIGS, {})
 
     coordinator = MiniSplitThermostatCoordinator(
         hass=hass,
