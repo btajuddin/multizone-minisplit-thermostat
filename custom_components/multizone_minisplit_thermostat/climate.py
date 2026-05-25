@@ -182,12 +182,14 @@ class MiniSplitThermostatCoordinator:
         }
 
     def determine_hvac_mode(self) -> HVACMode | None:
-        """Determine the appropriate HVAC mode based on zone temperatures.
+        """Determine the appropriate HVAC mode based on zone temperatures and presets.
 
-        Returns the mode that should be set, or None if no change is needed.
-        A zone needs HEAT if current temp is below heat_target - tolerance.
-        A zone needs COOL if current temp is above cool_target + tolerance.
-        If zones conflict, the highest priority zone wins.
+        Evaluates each zone's current temperature against its preset-specific
+        heat and cool targets (with tolerance). Returns the mode that should
+        be actively set. Returns None when all zones are within their comfort
+        band, signaling that the current mode should remain unchanged.
+        If zones conflict (some need heat, some need cool), the highest
+        priority zone wins.
         """
         if not self._auto_mode:
             return None
@@ -235,7 +237,8 @@ class MiniSplitThermostatCoordinator:
         if cool_zones:
             return HVACMode.COOL
 
-        return None  # All zones within comfort band
+        # All zones are within their comfort band - keep current mode unchanged
+        return None
 
     async def async_check_and_update_mode(self) -> None:
         """Check if HVAC mode needs to change and apply it if so."""
@@ -250,6 +253,7 @@ class MiniSplitThermostatCoordinator:
 
         determined_mode = self.determine_hvac_mode()
         if determined_mode is None:
+            # All zones within range - keep current mode unchanged
             return
 
         if determined_mode == self._hvac_mode:

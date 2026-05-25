@@ -1,12 +1,12 @@
 {
   "domain": "multizone_minisplit_thermostat",
   "name": "Multi-Zone Mini-Split Thermostat",
-  "codeowners": ["@brian"],
+  "codeowners": ["@btajuddin"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/brian/multizone-minisplit-thermostat",
+  "documentation": "https://github.com/btajuddin/multizone-minisplit-thermostat",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/brian/multizone-minisplit-thermostat/issues",
+  "issue_tracker": "https://github.com/btajuddin/multizone-minisplit-thermostat/issues",
   "requirements": [],
   "version": "1.0.0"
 }
