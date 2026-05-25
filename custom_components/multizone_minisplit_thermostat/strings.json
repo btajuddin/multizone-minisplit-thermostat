@@ -31,7 +31,10 @@
       },
       "add_zone_confirm": {
         "title": "Add Another Zone?",
-        "description": "Would you like to add another climate zone to this group?"
+        "description": "Would you like to add another climate zone to this group?",
+        "data": {
+          "add_another": "Add another zone"
+        }
       }
     },
     "error": {
