@@ -28,7 +28,7 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.CLIMATE, Platform.SELECT]
+PLATFORMS = [Platform.CLIMATE, Platform.SELECT, Platform.NUMBER]
 
 # Per-preset temperature configuration schema (shared across all zones)
 PRESET_CONFIG_SCHEMA = vol.Schema({

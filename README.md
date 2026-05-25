@@ -124,6 +124,15 @@ One select entity is created for each zone:
 
 Changing the select updates the zone's preset, which recalculates its target temperature based on the global preset configuration and current HVAC mode.
 
+### Number Entities (Preset Temperatures)
+
+Six number entities are created (one for each preset × mode combination):
+- **Names**: `{Thermostat Name} - {Preset} {Heating|Cooling} Target`
+- **Range**: 40°F to 95°F, step 1°F
+- **Purpose**: Configure the target temperatures for each preset globally
+
+Changing a preset temperature updates the target for all zones using that preset. The new target takes effect when the system mode matches (heating targets apply in HEAT mode, cooling targets in COOL mode).
+
 ## Services
 
 ### `multizone_minisplit_thermostat.set_zone_preset`
@@ -181,4 +190,11 @@ data:
           ├──▶ Select: Server Room Preset → failsafe
           ├──▶ Select: Living Room Preset → comfort
           └──▶ Select: Bedroom Preset → comfort
+          
+          ┌─────────────────────────────────────────┐
+          │   Number Entities (Preset Temperatures) │
+          │   - Comfort Heating/Cooling Target      │
+          │   - Eco Heating/Cooling Target          │
+          │   - Failsafe Heating/Cooling Target     │
+          └─────────────────────────────────────────┘
 ```

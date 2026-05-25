@@ -68,6 +68,11 @@
           "failsafe": "Failsafe"
         }
       }
+    },
+    "number": {
+      "preset_temperature": {
+        "name": "Preset Temperature"
+      }
     }
   }
 }

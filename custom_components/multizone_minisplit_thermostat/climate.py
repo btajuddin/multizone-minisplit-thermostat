@@ -82,6 +82,7 @@ class MiniSplitThermostatCoordinator:
         self._auto_mode: bool = True
         self._thermostat_entity: MultiZoneMinisplitThermostat | None = None
         self._select_entities: list["ZonePresetSelect"] = []
+        self._number_entities: list["PresetTemperatureNumber"] = []
         self._remove_trackers: list[CALLBACK_TYPE] = []
         self._last_auto_mode_change: float = 0.0
 
@@ -110,12 +111,33 @@ class MiniSplitThermostatCoordinator:
         """Register a select entity for state update callbacks."""
         self._select_entities.append(entity)
 
+    def add_number_entity(self, entity: "PresetTemperatureNumber") -> None:
+        """Register a number entity for state update callbacks."""
+        self._number_entities.append(entity)
+
+    def get_preset_temp(self, preset: str, mode: str) -> float:
+        """Get the target temperature for a preset and mode (heat/cool)."""
+        preset_config = self._preset_configs.get(preset, {})
+        if mode == "heat":
+            return preset_config.get("heat_temp", DEFAULT_HEAT_TEMP)
+        return preset_config.get("cool_temp", DEFAULT_COOL_TEMP)
+
+    async def async_set_preset_temp(self, preset: str, mode: str, value: float) -> None:
+        """Set the target temperature for a preset and mode."""
+        if preset not in self._preset_configs:
+            self._preset_configs[preset] = {}
+        key = "heat_temp" if mode == "heat" else "cool_temp"
+        self._preset_configs[preset][key] = value
+        self._notify_state_changed()
+
     def _notify_state_changed(self) -> None:
         """Notify all registered entities that state has changed."""
         if self._thermostat_entity is not None:
             self._thermostat_entity.async_write_ha_state()
         for select_entity in self._select_entities:
             select_entity.async_write_ha_state()
+        for number_entity in self._number_entities:
+            number_entity.async_write_ha_state()
 
     async def async_request_ha_state_update(self) -> None:
         """Request all registered entities to update their HA state."""
