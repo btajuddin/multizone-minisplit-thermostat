@@ -70,7 +70,7 @@ class PresetTemperatureNumber(NumberEntity):
         # Create friendly name like "Comfort Heating Target"
         mode_label = "Heating" if mode == "heat" else "Cooling"
         preset_label = preset.title()
-        self._attr_name = f"{coordinator.entry_name} - {preset_label} {mode_label} Target"
+        self._attr_name = f"{preset_label} {mode_label} Target"
         self._attr_unique_id = f"{coordinator.entry_id}_{preset}_{mode}_temp"
         self.entity_id = async_generate_entity_id(
             NUMBER_ENTITY_ID_FORMAT,

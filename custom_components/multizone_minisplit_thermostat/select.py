@@ -74,7 +74,7 @@ class ZonePresetSelect(SelectEntity):
 
         # Create a friendly name like "Living Room Preset"
         friendly_part = underlying_entity_id.split(".", 1)[-1].replace("_", " ").title()
-        self._attr_name = f"{coordinator.entry_name} - {friendly_part} Preset"
+        self._attr_name = f"{friendly_part} Preset"
         self._attr_unique_id = f"{coordinator.entry_id}_preset_{underlying_entity_id}"
         # Extract zone name from entity_id (e.g., "climate.office" -> "office")
         zone_name = underlying_entity_id.split(".")[-1]
@@ -122,7 +122,7 @@ class ModeSelect(SelectEntity):
     ) -> None:
         """Initialize the mode select entity."""
         self.coordinator = coordinator
-        self._attr_name = f"{coordinator.entry_name} Mode"
+        self._attr_name = "Mode"
         self._attr_unique_id = f"{coordinator.entry_id}_mode"
         self.entity_id = async_generate_entity_id(
             "select.{}",
