@@ -6,6 +6,7 @@ from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME, UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import async_generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -77,6 +78,9 @@ class PresetTemperatureNumber(NumberEntity):
             NUMBER_ENTITY_ID_FORMAT,
             f"{thermostat_name}_{preset}_{mode}_target",
             hass=coordinator.hass,
+        )
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.entry_id)},
         )
 
     @property
