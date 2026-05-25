@@ -1,10 +1,10 @@
-set_entity_preset:
-  name: Set Entity Preset
-  description: Set the preset for a specific underlying climate entity.
+set_zone_preset:
+  name: Set Zone Preset
+  description: Set the preset for a specific zone.
   fields:
-    entity:
-      name: Entity
-      description: The underlying climate entity ID to set the preset for.
+    zone:
+      name: Zone
+      description: The climate entity ID of the zone to set the preset for.
       required: true
       example: "climate.living_room_minisplit"
       selector:

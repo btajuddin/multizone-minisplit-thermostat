@@ -13,22 +13,22 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
-    ATTR_ENTITY,
     ATTR_PRESET,
+    ATTR_ZONE,
     CONF_DEFAULT_PRESET,
-    CONF_ENTITIES,
     CONF_ENTITY_ID,
     CONF_PRESET_CONFIGS,
+    CONF_ZONES,
     DOMAIN,
     PRESETS,
-    SERVICE_SET_ENTITY_PRESET,
+    SERVICE_SET_ZONE_PRESET,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = [Platform.CLIMATE, Platform.SELECT]
 
-# Per-preset temperature configuration schema (shared across all entities)
+# Per-preset temperature configuration schema (shared across all zones)
 PRESET_CONFIG_SCHEMA = vol.Schema({
     vol.In(PRESETS): {
         vol.Optional("heat_temp"): vol.Coerce(float),
@@ -36,8 +36,8 @@ PRESET_CONFIG_SCHEMA = vol.Schema({
     }
 })
 
-# Per-entity configuration schema
-ENTITY_CONFIG_SCHEMA = vol.Schema({
+# Per-zone configuration schema
+ZONE_CONFIG_SCHEMA = vol.Schema({
     vol.Required(CONF_ENTITY_ID): cv.entity_id,
     vol.Optional(CONF_DEFAULT_PRESET, default="comfort"): vol.In(PRESETS),
 })
@@ -45,7 +45,7 @@ ENTITY_CONFIG_SCHEMA = vol.Schema({
 # Top-level integration schema
 INTEGRATION_SCHEMA = vol.Schema({
     vol.Required(CONF_NAME): cv.string,
-    vol.Required(CONF_ENTITIES): vol.All(cv.ensure_list, [ENTITY_CONFIG_SCHEMA]),
+    vol.Required(CONF_ZONES): vol.All(cv.ensure_list, [ZONE_CONFIG_SCHEMA]),
     vol.Optional(CONF_PRESET_CONFIGS, default={}): PRESET_CONFIG_SCHEMA,
 })
 
@@ -67,18 +67,18 @@ def _register_coordinator(coordinator: "MiniSplitThermostatCoordinator") -> None
     _coordinators[coordinator.entry_id] = coordinator
 
 
+def _get_coordinator(entry_id: str) -> "MiniSplitThermostatCoordinator | None":
+    """Get a registered coordinator by entry ID."""
+    return _coordinators.get(entry_id)
+
+
 def _unregister_coordinator(entry_id: str) -> None:
     """Unregister a coordinator."""
     _coordinators.pop(entry_id, None)
 
 
-def _get_coordinator(entry_id: str) -> "MiniSplitThermostatCoordinator | None":
-    """Get a coordinator by entry_id."""
-    return _coordinators.get(entry_id)
-
-
-def _find_coordinator_for_entity(entity_id: str) -> "MiniSplitThermostatCoordinator | None":
-    """Find the coordinator that manages a given underlying entity."""
+def _find_coordinator_for_zone(entity_id: str) -> "MiniSplitThermostatCoordinator | None":
+    """Find the coordinator that manages a given underlying zone."""
     for coordinator in _coordinators.values():
         if entity_id in coordinator.entity_presets:
             return coordinator
@@ -131,30 +131,30 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 def _async_register_services(hass: HomeAssistant) -> None:
     """Register integration services (called once from async_setup)."""
 
-    async def async_set_entity_preset(call: ServiceCall) -> None:
-        """Set the preset for a specific underlying entity."""
-        target_entity = call.data[ATTR_ENTITY]
+    async def async_set_zone_preset(call: ServiceCall) -> None:
+        """Set the preset for a specific underlying zone."""
+        target_zone = call.data[ATTR_ZONE]
         preset = call.data[ATTR_PRESET]
 
-        coordinator = _find_coordinator_for_entity(target_entity)
+        coordinator = _find_coordinator_for_zone(target_zone)
         if coordinator is None:
             _LOGGER.warning(
-                "Entity %s is not managed by any %s thermostat",
-                target_entity,
+                "Zone %s is not managed by any %s thermostat",
+                target_zone,
                 DOMAIN,
             )
             return
 
-        coordinator.set_entity_preset(target_entity, preset)
-        # Trigger HA state update for the thermostat entity
+        coordinator.set_entity_preset(target_zone, preset)
+        # Trigger HA state update for the thermostat
         coordinator.async_request_ha_state_update()
 
     hass.services.async_register(
         DOMAIN,
-        SERVICE_SET_ENTITY_PRESET,
-        async_set_entity_preset,
+        SERVICE_SET_ZONE_PRESET,
+        async_set_zone_preset,
         schema=vol.Schema({
-            vol.Required(ATTR_ENTITY): cv.entity_id,
+            vol.Required(ATTR_ZONE): cv.entity_id,
             vol.Required(ATTR_PRESET): vol.In(PRESETS),
         }),
     )

@@ -14,9 +14,9 @@ from homeassistant.helpers import config_validation as cv
 
 from .const import (
     CONF_DEFAULT_PRESET,
-    CONF_ENTITIES,
     CONF_ENTITY_ID,
     CONF_PRESET_CONFIGS,
+    CONF_ZONES,
     DOMAIN,
     PRESETS,
 )
@@ -25,14 +25,9 @@ STEP_USER_DATA_SCHEMA = vol.Schema({
     vol.Required(CONF_NAME): str,
 })
 
-STEP_ADD_ENTITY_SCHEMA = vol.Schema({
+STEP_ADD_ZONE_SCHEMA = vol.Schema({
     vol.Required(CONF_ENTITY_ID): str,
     vol.Optional(CONF_DEFAULT_PRESET, default="comfort"): vol.In(PRESETS),
-})
-
-STEP_PRESET_TEMP_SCHEMA = vol.Schema({
-    vol.Optional("heat_temp"): vol.Coerce(float),
-    vol.Optional("cool_temp"): vol.Coerce(float),
 })
 
 
@@ -47,7 +42,7 @@ class MultizoneMinisplitThermostatFlowHandler(
         """Initialize the config flow."""
         self._name: str | None = None
         self._entry_id: str | None = None
-        self._entities: list[dict[str, Any]] = []
+        self._zones: list[dict[str, Any]] = []
         self._preset_configs: dict[str, dict[str, float]] = {}
 
     async def async_step_import(self, user_input: dict[str, Any] | None = None) -> FlowResult:
@@ -75,7 +70,7 @@ class MultizoneMinisplitThermostatFlowHandler(
             await self.async_set_unique_id(self._entry_id)
             self._abort_if_unique_id_configured()
 
-            self._entities = []
+            self._zones = []
             self._preset_configs = {}
             return await self.async_step_preset_config()
 
@@ -99,7 +94,7 @@ class MultizoneMinisplitThermostatFlowHandler(
                 if cool is not None:
                     self._preset_configs[preset]["cool_temp"] = cool
 
-            return await self.async_step_add_entity()
+            return await self.async_step_add_zone()
 
         # Build schema with optional temp fields for each preset
         schema_dict = {}
@@ -114,36 +109,36 @@ class MultizoneMinisplitThermostatFlowHandler(
             description_placeholders={"presets": ", ".join(PRESETS)},
         )
 
-    async def async_step_add_entity(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle adding an entity to the thermostat group."""
+    async def async_step_add_zone(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Handle adding a zone to the thermostat group."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            entity_config = {
+            zone_config = {
                 CONF_ENTITY_ID: user_input[CONF_ENTITY_ID],
                 CONF_DEFAULT_PRESET: user_input.get(CONF_DEFAULT_PRESET, "comfort"),
             }
-            self._entities.append(entity_config)
+            self._zones.append(zone_config)
 
             return self.async_show_form(
-                step_id="add_entity_confirm",
+                step_id="add_zone_confirm",
                 data_schema=vol.Schema({
                     vol.Optional("add_another", default=False): bool,
                 }),
             )
 
         return self.async_show_form(
-            step_id="add_entity",
-            data_schema=STEP_ADD_ENTITY_SCHEMA,
+            step_id="add_zone",
+            data_schema=STEP_ADD_ZONE_SCHEMA,
             errors=errors,
         )
 
-    async def async_step_add_entity_confirm(
+    async def async_step_add_zone_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle confirmation of adding another entity."""
+        """Handle confirmation of adding another zone."""
         if user_input and user_input.get("add_another"):
-            return await self.async_step_add_entity()
+            return await self.async_step_add_zone()
 
         return await self.async_step_finalize()
 
@@ -153,7 +148,7 @@ class MultizoneMinisplitThermostatFlowHandler(
             title=self._name or "Multi-Zone Thermostat",
             data={
                 CONF_NAME: self._name,
-                CONF_ENTITIES: self._entities,
+                CONF_ZONES: self._zones,
                 CONF_PRESET_CONFIGS: self._preset_configs,
             },
         )

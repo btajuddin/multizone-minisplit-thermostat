@@ -11,12 +11,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import async_generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import _get_coordinator
-from .climate import MiniSplitThermostatCoordinator
 from .const import (
     CONF_DEFAULT_PRESET,
-    CONF_ENTITIES,
     CONF_ENTITY_ID,
+    CONF_ZONES,
     DOMAIN,
     PRESETS,
 )
@@ -30,14 +28,16 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the select platform."""
+    from . import _get_coordinator
+
     coordinator = _get_coordinator(entry.entry_id)
     if coordinator is None:
         return
 
     entities = []
-    for entity_config in entry.data.get(CONF_ENTITIES, []):
-        underlying_entity_id = entity_config[CONF_ENTITY_ID]
-        default_preset = entity_config.get(CONF_DEFAULT_PRESET, "comfort")
+    for zone_config in coordinator.zone_configs:
+        underlying_entity_id = zone_config[CONF_ENTITY_ID]
+        default_preset = zone_config.get(CONF_DEFAULT_PRESET, "comfort")
 
         select_entity = ZonePresetSelect(
             coordinator=coordinator,
@@ -59,7 +59,7 @@ class ZonePresetSelect(SelectEntity):
 
     def __init__(
         self,
-        coordinator: MiniSplitThermostatCoordinator,
+        coordinator: "MiniSplitThermostatCoordinator",
         underlying_entity_id: str,
         default_preset: str,
         thermostat_name: str,
@@ -68,6 +68,7 @@ class ZonePresetSelect(SelectEntity):
         self.coordinator = coordinator
         self._underlying_entity_id = underlying_entity_id
 
+        # Create a friendly name like "Living Room Preset"
         friendly_part = underlying_entity_id.split(".", 1)[-1].replace("_", " ").title()
         self._attr_name = f"{thermostat_name} - {friendly_part} Preset"
         self._attr_unique_id = f"{coordinator.entry_id}_preset_{underlying_entity_id}"
@@ -92,6 +93,6 @@ class ZonePresetSelect(SelectEntity):
         """Return zone-specific attributes."""
         target_temps = self.coordinator.get_all_target_temps()
         return {
-            "underlying_entity": self._underlying_entity_id,
+            "zone_entity": self._underlying_entity_id,
             "target_temperature": target_temps.get(self._underlying_entity_id),
         }

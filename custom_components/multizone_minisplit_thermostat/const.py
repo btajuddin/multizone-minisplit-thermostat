@@ -14,22 +14,22 @@ PRESETS = [PRESET_COMFORT, PRESET_ECO, PRESET_FAILSAFE]
 HVAC_MODES = [HVACMode.HEAT, HVACMode.COOL]
 
 # Configuration keys
-CONF_ENTITIES = "entities"
+CONF_ZONES = "zones"
 CONF_ENTITY_ID = "entity_id"
 CONF_PRESET_CONFIGS = "presets"
 CONF_DEFAULT_PRESET = "default_preset"
 
-# Per-preset temperature keys (these are shared across all entities)
+# Per-preset temperature keys (shared across all zones)
 CONF_HEAT_TEMP = "heat_temp"
 CONF_COOL_TEMP = "cool_temp"
 
-# Entity attribute keys
-ATTR_ENTITY_PRESETS = "entity_presets"
-ATTR_ENTITY_TARGET_TEMPS = "entity_target_temps"
+# Zone attribute keys
+ATTR_ZONE_PRESETS = "zone_presets"
+ATTR_ZONE_TARGET_TEMPS = "zone_target_temps"
 
 # Service constants
-SERVICE_SET_ENTITY_PRESET = "set_entity_preset"
-ATTR_ENTITY = "entity"
+SERVICE_SET_ZONE_PRESET = "set_zone_preset"
+ATTR_ZONE = "zone"
 ATTR_PRESET = "preset"
 
 # Defaults

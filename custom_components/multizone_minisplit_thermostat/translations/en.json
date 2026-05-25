@@ -3,14 +3,14 @@
     "step": {
       "user": {
         "title": "Multi-Zone Mini-Split Thermostat",
-        "description": "Set up a virtual thermostat that manages multiple mini-split climate entities.",
+        "description": "Set up a virtual thermostat that manages multiple mini-split zones.",
         "data": {
           "name": "Thermostat Name"
         }
       },
       "preset_config": {
         "title": "Configure Preset Temperatures",
-        "description": "Set heating and cooling target temperatures for each preset. These temperatures are shared across all climate entities in the group.",
+        "description": "Set heating and cooling target temperatures for each preset. These temperatures are shared across all zones in the group.",
         "data": {
           "comfort_heat_temp": "Comfort - Heating Target",
           "comfort_cool_temp": "Comfort - Cooling Target",
@@ -20,21 +20,21 @@
           "failsafe_cool_temp": "Failsafe - Cooling Target"
         }
       },
-      "add_entity": {
-        "title": "Add Climate Entity",
-        "description": "Add a climate entity to this thermostat group.",
+      "add_zone": {
+        "title": "Add Climate Zone",
+        "description": "Add a climate zone to this thermostat group.",
         "data": {
-          "entity_id": "Climate Entity ID",
+          "entity_id": "Climate Zone Entity ID",
           "default_preset": "Default Preset"
         }
       },
-      "add_entity_confirm": {
-        "title": "Add Another Entity?",
-        "description": "Would you like to add another climate entity to this group?"
+      "add_zone_confirm": {
+        "title": "Add Another Zone?",
+        "description": "Would you like to add another climate zone to this group?"
       }
     },
     "error": {
-      "invalid_entity": "Invalid climate entity ID"
+      "invalid_zone": "Invalid climate entity ID"
     },
     "abort": {
       "already_configured": "This thermostat is already configured",
@@ -42,13 +42,13 @@
     }
   },
   "services": {
-    "set_entity_preset": {
-      "name": "Set Entity Preset",
-      "description": "Set the preset for a specific underlying climate entity.",
+    "set_zone_preset": {
+      "name": "Set Zone Preset",
+      "description": "Set the preset for a specific zone.",
       "fields": {
-        "entity": {
-          "name": "Entity",
-          "description": "The underlying climate entity ID to set the preset for."
+        "zone": {
+          "name": "Zone",
+          "description": "The climate entity ID of the zone to set the preset for."
         },
         "preset": {
           "name": "Preset",
