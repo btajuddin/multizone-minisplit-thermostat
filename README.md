@@ -4,7 +4,7 @@ A Home Assistant custom integration that creates a virtual thermostat to manage 
 
 ## Features
 
-- **Group mode control** - set heat, cool, or off mode for all mini-splits at once
+- **Mode select** - control heat, cool, or off mode for all mini-splits at once
 - **Automatic mode switching** - automatically switches between heat and cool based on zone temperatures
 - **Per-zone preset selectors** - each zone has its own select input for preset (comfort, eco, failsafe)
 - **Global preset temperatures** - define heating and cooling targets for each preset, shared across all zones
@@ -13,12 +13,13 @@ A Home Assistant custom integration that creates a virtual thermostat to manage 
 
 ## Architecture
 
-This integration creates two types of entities:
+This integration creates three types of entities, all grouped under a single device:
 
-1. **Climate entity** (group controller) - manages HVAC mode (heat/cool/off) for all zones, shows average current temperature, and exposes per-zone state as attributes
+1. **Mode select** - controls HVAC mode (heat/cool/off) for all zones
 2. **Select entities** (one per zone) - control the active preset for each individual zone
+3. **Number entities** (one per preset × mode) - configure heating and cooling target temperatures
 
-Temperature targets are derived from the global preset configuration and the currently active preset for each zone. The climate entity does not expose a target temperature or preset mode directly since those are managed per-zone.
+Temperature targets are derived from the global preset configuration and the currently active preset for each zone.
 
 ## Automatic Mode Switching
 
@@ -29,8 +30,9 @@ The integration automatically determines whether to operate in HEAT or COOL mode
 - If a zone's current temperature rises above `cool_target + 1°F`, it needs COOL
 - If all zones are within their comfort bands, the mode does not change
 - If zones conflict (some need heat, some need cool), the **highest priority zone** wins
+- Mode changes have a 5-minute cooldown to prevent rapid switching
 
-Setting the mode manually to HEAT or COOL keeps auto-switching enabled. Setting it to OFF disables auto-switching.
+Setting the mode manually keeps auto-switching enabled. Setting it to OFF disables auto-switching.
 
 ## Zone Priority
 
@@ -108,19 +110,17 @@ multizone_minisplit_thermostat:
 
 ## Entities
 
-### Climate Entity (Group Controller)
+### Mode Select
 
-The main climate entity provides:
-- **HVAC mode control** - heat, cool, or off (propagates to all zones)
-- **Current temperature** - average across all zones
-- **Attributes** - per-zone preset, priority, heat/cool targets, current target temperature, and raw state
+Controls the HVAC mode for all zones:
+- **Options**: `heat`, `cool`, `off`
+- **Setting to OFF** disables automatic mode switching
 
 ### Select Entities (Per-Zone Preset)
 
 One select entity is created for each zone:
 - **Name**: `{Thermostat Name} - {Zone Name} Preset`
 - **Options**: `comfort`, `eco`, `failsafe`
-- **Attributes**: zone's entity ID, current target temperature
 
 Changing the select updates the zone's preset, which recalculates its target temperature based on the global preset configuration and current HVAC mode.
 
@@ -130,8 +130,6 @@ Six number entities are created (one for each preset × mode combination):
 - **Names**: `{Thermostat Name} - {Preset} {Heating|Cooling} Target`
 - **Range**: 40°F to 95°F, step 1°F
 - **Purpose**: Configure the target temperatures for each preset globally
-
-Changing a preset temperature updates the target for all zones using that preset. The new target takes effect when the system mode matches (heating targets apply in HEAT mode, cooling targets in COOL mode).
 
 ## Services
 
@@ -144,16 +142,6 @@ Set the preset for a specific zone (alternative to using the select entity).
 | `zone` | Yes | The climate entity ID of the zone |
 | `preset` | Yes | The preset to apply (`comfort`, `eco`, or `failsafe`) |
 
-#### Example
-
-```yaml
-# Set bedroom to eco mode (energy saving)
-service: multizone_minisplit_thermostat.set_zone_preset
-data:
-  zone: climate.bedroom_minisplit
-  preset: eco
-```
-
 ## Presets
 
 | Preset | Description |
@@ -165,36 +153,24 @@ data:
 ## Architecture Diagram
 
 ```
-┌─────────────────────────────────────────┐
-│   Climate Entity (Group Controller)      │
-│                                          │
-│   Mode: HEAT (auto-switched)             │
-│   Current Temp: 71°F (avg)              │
-│                                          │
-│   Attributes:                            │
-│   - zone_presets: {...}                  │
-│   - zone_target_temps: {...}             │
-│   - zones: {                             │
-│       climate.server_room: {             │
-│         priority: 100,                   │
-│         preset: failsafe,                │
-│         heat_target: 60°F,               │
-│         cool_target: 85°F,               │
-│         target_temp: 60°F,               │
-│         ...                              │
-│       },                                 │
-│       ...                                │
-│     }                                    │
-└─────────────────────────────────────────┘
-          │
-          ├──▶ Select: Server Room Preset → failsafe
-          ├──▶ Select: Living Room Preset → comfort
-          └──▶ Select: Bedroom Preset → comfort
-          
-          ┌─────────────────────────────────────────┐
-          │   Number Entities (Preset Temperatures) │
-          │   - Comfort Heating/Cooling Target      │
-          │   - Eco Heating/Cooling Target          │
-          │   - Failsafe Heating/Cooling Target     │
-          └─────────────────────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│   Device: {Thermostat Name}                     │
+│                                                 │
+│   ┌───────────────────────────────────────────┐ │
+│   │  Select: Mode → heat                      │ │
+│   └───────────────────────────────────────────┘ │
+│   ┌───────────────────────────────────────────┐ │
+│   │  Select: Server Room Preset → failsafe    │ │
+│   │  Select: Living Room Preset → comfort     │ │
+│   │  Select: Bedroom Preset → comfort         │ │
+│   └───────────────────────────────────────────┘ │
+│   ┌───────────────────────────────────────────┐ │
+│   │  Number: Comfort Heating Target → 70°F    │ │
+│   │  Number: Comfort Cooling Target → 72°F    │ │
+│   │  Number: Eco Heating Target → 65°F        │ │
+│   │  Number: Eco Cooling Target → 78°F        │ │
+│   │  Number: Failsafe Heating Target → 60°F   │ │
+│   │  Number: Failsafe Cooling Target → 85°F   │ │
+│   └───────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────┘
 ```

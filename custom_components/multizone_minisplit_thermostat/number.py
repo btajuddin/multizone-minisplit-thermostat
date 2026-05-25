@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_NAME, UnitOfTemperature
+from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import async_generate_entity_id
@@ -14,6 +14,7 @@ from .const import (
     DOMAIN,
     PRESETS,
 )
+from .coordinator import MiniSplitThermostatCoordinator
 
 NUMBER_ENTITY_ID_FORMAT = "number.{}"
 
@@ -30,7 +31,6 @@ async def async_setup_entry(
     if coordinator is None:
         return
 
-    thermostat_name = entry.data.get(CONF_NAME, entry.entry_id)
     entities = []
 
     for preset in PRESETS:
@@ -39,7 +39,6 @@ async def async_setup_entry(
                 coordinator=coordinator,
                 preset=preset,
                 mode=mode,
-                thermostat_name=thermostat_name,
             )
             coordinator.add_number_entity(number_entity)
             entities.append(number_entity)
@@ -59,10 +58,9 @@ class PresetTemperatureNumber(NumberEntity):
 
     def __init__(
         self,
-        coordinator: "MiniSplitThermostatCoordinator",
+        coordinator: MiniSplitThermostatCoordinator,
         preset: str,
         mode: str,
-        thermostat_name: str,
     ) -> None:
         """Initialize the number entity."""
         self.coordinator = coordinator
@@ -72,15 +70,18 @@ class PresetTemperatureNumber(NumberEntity):
         # Create friendly name like "Comfort Heating Target"
         mode_label = "Heating" if mode == "heat" else "Cooling"
         preset_label = preset.title()
-        self._attr_name = f"{thermostat_name} - {preset_label} {mode_label} Target"
+        self._attr_name = f"{coordinator.entry_name} - {preset_label} {mode_label} Target"
         self._attr_unique_id = f"{coordinator.entry_id}_{preset}_{mode}_temp"
         self.entity_id = async_generate_entity_id(
             NUMBER_ENTITY_ID_FORMAT,
-            f"{thermostat_name}_{preset}_{mode}_target",
+            f"{coordinator.entry_name}_{preset}_{mode}_target",
             hass=coordinator.hass,
         )
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, coordinator.entry_id)},
+            name=coordinator.entry_name,
+            manufacturer="Multi-Zone Mini-Split Thermostat",
+            model="Virtual Thermostat",
         )
 
     @property

@@ -25,10 +25,11 @@ from .const import (
     PRESETS,
     SERVICE_SET_ZONE_PRESET,
 )
+from .coordinator import MiniSplitThermostatCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.CLIMATE, Platform.SELECT, Platform.NUMBER]
+PLATFORMS = [Platform.SELECT, Platform.NUMBER]
 
 # Per-preset temperature configuration schema (shared across all zones)
 PRESET_CONFIG_SCHEMA = vol.Schema({
@@ -62,15 +63,15 @@ CONFIG_SCHEMA = vol.Schema(
 )
 
 # Store coordinators for service lookup
-_coordinators: dict[str, "MiniSplitThermostatCoordinator"] = {}
+_coordinators: dict[str, MiniSplitThermostatCoordinator] = {}
 
 
-def _register_coordinator(coordinator: "MiniSplitThermostatCoordinator") -> None:
+def _register_coordinator(coordinator: MiniSplitThermostatCoordinator) -> None:
     """Register a coordinator for service lookups."""
     _coordinators[coordinator.entry_id] = coordinator
 
 
-def _get_coordinator(entry_id: str) -> "MiniSplitThermostatCoordinator | None":
+def _get_coordinator(entry_id: str) -> MiniSplitThermostatCoordinator | None:
     """Get a registered coordinator by entry ID."""
     return _coordinators.get(entry_id)
 
@@ -80,8 +81,8 @@ def _unregister_coordinator(entry_id: str) -> None:
     _coordinators.pop(entry_id, None)
 
 
-def _find_coordinator_for_zone(entity_id: str) -> "MiniSplitThermostatCoordinator | None":
-    """Find the coordinator that manages a given underlying zone."""
+def _find_coordinator_for_zone(entity_id: str) -> MiniSplitThermostatCoordinator | None:
+    """Find the coordinator that manages a given underlying zone entity."""
     for coordinator in _coordinators.values():
         if entity_id in coordinator.entity_presets:
             return coordinator
@@ -113,8 +114,22 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Multi-Zone Mini-Split Thermostat from a config entry."""
+    from .coordinator import MiniSplitThermostatCoordinator
+
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = entry.data
+
+    zone_configs = entry.data.get(CONF_ZONES, [])
+    preset_configs = entry.data.get(CONF_PRESET_CONFIGS, {})
+
+    coordinator = MiniSplitThermostatCoordinator(
+        hass=hass,
+        entry=entry,
+        zone_configs=zone_configs,
+        preset_configs=preset_configs,
+    )
+    _register_coordinator(coordinator)
+    coordinator.setup_state_listeners()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -125,6 +140,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
+        coordinator = _get_coordinator(entry.entry_id)
+        if coordinator:
+            coordinator.cleanup()
         _unregister_coordinator(entry.entry_id)
         hass.data[DOMAIN].pop(entry.entry_id, None)
 
@@ -149,7 +167,6 @@ def _async_register_services(hass: HomeAssistant) -> None:
             return
 
         coordinator.set_entity_preset(target_zone, preset)
-        # Trigger HA state update for the thermostat
         await coordinator.async_check_and_update_mode()
         coordinator.async_request_ha_state_update()
 

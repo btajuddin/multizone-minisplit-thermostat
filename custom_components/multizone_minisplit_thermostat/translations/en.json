@@ -60,6 +60,14 @@
   },
   "entity": {
     "select": {
+      "mode": {
+        "name": "Mode",
+        "state": {
+          "heat": "Heat",
+          "cool": "Cool",
+          "off": "Off"
+        }
+      },
       "zone_preset": {
         "name": "Zone Preset",
         "state": {

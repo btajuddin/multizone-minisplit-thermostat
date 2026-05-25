@@ -155,7 +155,7 @@ class MultizoneMinisplitThermostatFlowHandler(
         return self.async_create_entry(
             title=self._name or "Multi-Zone Thermostat",
             data={
-                CONF_NAME: self._name,
+                CONF_NAME: self._name or "Multi-Zone Thermostat",
                 CONF_ZONES: self._zones,
                 CONF_PRESET_CONFIGS: self._preset_configs,
             },
