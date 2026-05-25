@@ -65,6 +65,16 @@ Each zone has a priority value (integer, default: 0). When zones have conflictin
    - Configure preset temperatures (heat/cool targets for comfort, eco, failsafe)
    - Add zones one by one, selecting a default preset and priority for each
 
+#### Reconfiguration
+
+After initial setup, you can reconfigure the integration to add or remove zones:
+1. Go to Settings > Devices & Services > Multi-Zone Mini-Split Thermostat
+2. Click the integration entry, then click **Configure**
+3. Add or remove zones as needed
+4. Click **Finalize** to save changes
+
+Preset temperatures can be adjusted anytime using the number entity controls on the dashboard—no reconfiguration needed.
+
 ### Via YAML
 
 Add to your `configuration.yaml`:

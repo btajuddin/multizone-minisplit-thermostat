@@ -62,11 +62,16 @@ class MiniSplitThermostatCoordinator:
         if not name:
             name = "Multi-Zone Thermostat"
         self._entry_name = name
+        # Restore mode from options, or determine on startup
+        stored_mode = entry.options.get("mode")
+        if stored_mode:
+            self._hvac_mode = HVACMode(stored_mode)
+        else:
+            self._hvac_mode = None
         self.zone_configs = zone_configs
         self._preset_configs: dict[str, dict[str, float]] = preset_configs
         self._zone_presets: dict[str, str] = {}
-        self._hvac_mode: HVACMode | None = None
-        self._auto_mode: bool = True
+        self._auto_mode: bool = False
         self._select_entities: list = []
         self._number_entities: list = []
         self._remove_trackers: list = []
@@ -116,6 +121,17 @@ class MiniSplitThermostatCoordinator:
         self._preset_configs[preset][key] = value
         self._notify_state_changed()
 
+    async def _persist_mode(self) -> None:
+        """Persist the current mode to config entry options."""
+        mode_value = self._hvac_mode.value if self._hvac_mode else None
+        current_options = dict(self.hass.config_entries.async_get_entry(self.entry_id).options)
+        if current_options.get("mode") != mode_value:
+            new_options = {**current_options, "mode": mode_value}
+            self.hass.config_entries.async_update_entry(
+                self.hass.config_entries.async_get_entry(self.entry_id),
+                options=new_options,
+            )
+
     def _notify_state_changed(self) -> None:
         """Notify all registered entities that state has changed."""
         for select_entity in self._select_entities:
@@ -147,6 +163,7 @@ class MiniSplitThermostatCoordinator:
             self._auto_mode = False
         self._last_auto_mode_change = time.time()
         self._notify_state_changed()
+        await self._persist_mode()
 
     def _get_heat_target(self, entity_id: str) -> float:
         """Get the heating target temperature for a zone based on its preset."""
@@ -271,6 +288,7 @@ class MiniSplitThermostatCoordinator:
 
         self._last_auto_mode_change = time.time()
         self._notify_state_changed()
+        await self._persist_mode()
 
     def setup_state_listeners(self) -> None:
         """Set up state change listeners for underlying zones."""

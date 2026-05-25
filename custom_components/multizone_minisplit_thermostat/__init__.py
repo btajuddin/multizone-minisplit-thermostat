@@ -137,6 +137,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _register_coordinator(coordinator)
     coordinator.setup_state_listeners()
 
+    # Determine or restore mode on startup
+    await coordinator.async_check_and_update_mode()
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
