@@ -13,12 +13,12 @@ A Home Assistant custom integration that creates a virtual thermostat to manage 
 
 ## Architecture
 
-This integration creates three types of entities, all grouped under a single device:
+This integration creates entities grouped under multiple devices:
 
-1. **Mode select** - controls HVAC mode (heat/cool/off) for all zones
-2. **Select entities** (one per zone) - control the active preset for each individual zone
-3. **Number entities** (one per preset × mode) - configure heating and cooling target temperatures
-4. **Number entities** (one per zone) - configure zone priority for mode conflict resolution
+- **Main device**: Mode select and preset temperature numbers (global settings shared across all zones)
+- **Zone devices** (one per zone): Zone preset select and zone priority number
+
+Each zone device is linked to the main device via `via_device`, creating a hierarchical structure.
 
 Temperature targets are derived from the global preset configuration and the currently active preset for each zone.
 
@@ -178,11 +178,6 @@ Set the preset for a specific zone (alternative to using the select entity).
 │   │  Select: Mode → heat                      │ │
 │   └───────────────────────────────────────────┘ │
 │   ┌───────────────────────────────────────────┐ │
-│   │  Select: Server Room Preset → failsafe    │ │
-│   │  Select: Living Room Preset → comfort     │ │
-│   │  Select: Bedroom Preset → comfort         │ │
-│   └───────────────────────────────────────────┘ │
-│   ┌───────────────────────────────────────────┐ │
 │   │  Number: Comfort Heating Target → 70°F    │ │
 │   │  Number: Comfort Cooling Target → 72°F    │ │
 │   │  Number: Eco Heating Target → 65°F        │ │
@@ -190,10 +185,17 @@ Set the preset for a specific zone (alternative to using the select entity).
 │   │  Number: Failsafe Heating Target → 60°F   │ │
 │   │  Number: Failsafe Cooling Target → 85°F   │ │
 │   └───────────────────────────────────────────┘ │
-│   ┌───────────────────────────────────────────┐ │
-│   │  Number: Server Room Priority → 100       │ │
-│   │  Number: Living Room Priority → 10        │ │
-│   │  Number: Bedroom Priority → 0             │ │
-│   └───────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────┘
+       │                    │
+       ▼                    ▼
+┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+│ Device:          │  │ Device:          │  │ Device:          │
+│ {Name} - Server  │  │ {Name} - Living  │  │ {Name} - Bedroom │
+│ Room             │  │ Room             │  │                  │
+│                  │  │                  │  │                  │
+│  Preset:         │  │  Preset:         │  │  Preset:         │
+│  failsafe        │  │  comfort         │  │  comfort         │
+│                  │  │                  │  │                  │
+│  Priority: 100   │  │  Priority: 10    │  │  Priority: 0     │
+└──────────────────┘  └──────────────────┘  └──────────────────┘
 ```

@@ -137,7 +137,11 @@ class ZonePriorityNumber(NumberEntity):
             hass=coordinator.hass,
         )
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.entry_id)},
+            identifiers={(DOMAIN, f"{coordinator.entry_id}_zone_{entity_id}")},
+            name=f"{coordinator.entry_name} - {zone_name}",
+            manufacturer="Multi-Zone Mini-Split Thermostat",
+            model="Zone Controller",
+            via_device=(DOMAIN, coordinator.entry_id),
         )
 
     @property

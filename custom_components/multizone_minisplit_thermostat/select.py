@@ -84,11 +84,14 @@ class ZonePresetSelect(SelectEntity):
             hass=coordinator.hass,
         )
         self._attr_current_option = default_preset
+        # Create a unique device for this zone
+        zone_name = underlying_entity_id.split(".")[-1].replace("_", " ").title()
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.entry_id)},
-            name=coordinator.entry_name,
+            identifiers={(DOMAIN, f"{coordinator.entry_id}_zone_{underlying_entity_id}")},
+            name=f"{coordinator.entry_name} - {zone_name}",
             manufacturer="Multi-Zone Mini-Split Thermostat",
-            model="Virtual Thermostat",
+            model="Zone Controller",
+            via_device=(DOMAIN, coordinator.entry_id),
         )
 
     @property
