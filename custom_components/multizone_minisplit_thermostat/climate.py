@@ -13,7 +13,6 @@ from homeassistant.components.climate import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    ATTR_TEMPERATURE,
     CONF_NAME,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
@@ -22,7 +21,6 @@ from homeassistant.const import (
 from homeassistant.core import (
     CALLBACK_TYPE,
     HomeAssistant,
-    Event,
     callback,
 )
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -32,7 +30,6 @@ from homeassistant.helpers.event import async_track_state_change_event
 
 from . import _register_coordinator
 from .const import (
-    CONF_DEFAULT_PRESET,
     CONF_ENTITIES,
     CONF_ENTITY_ID,
     CONF_PRESET_CONFIGS,
@@ -40,8 +37,6 @@ from .const import (
     DEFAULT_HEAT_TEMP,
     DOMAIN,
     PRESET_COMFORT,
-    PRESET_ECO,
-    PRESET_FAILSAFE,
     PRESETS,
 )
 
@@ -74,13 +69,14 @@ class MiniSplitThermostatCoordinator:
         self._entity_presets: dict[str, str] = {}
         self._hvac_mode: HVACMode | None = None
         self._thermostat_entity: MultiZoneMinisplitThermostat | None = None
+        self._select_entities: list["ZonePresetSelect"] = []
         self._remove_trackers: list[CALLBACK_TYPE] = []
 
         # Initialize default presets from config
         for entity_config in entity_configs:
             entity_id = entity_config[CONF_ENTITY_ID]
             self._entity_presets[entity_id] = entity_config.get(
-                CONF_DEFAULT_PRESET, PRESET_COMFORT
+                "default_preset", PRESET_COMFORT
             )
 
     @property
@@ -97,24 +93,16 @@ class MiniSplitThermostatCoordinator:
         """Register the thermostat entity for state update callbacks."""
         self._thermostat_entity = entity
 
-    def async_request_ha_state_update(self) -> None:
-        """Request the thermostat entity to update its HA state."""
+    def add_select_entity(self, entity: "ZonePresetSelect") -> None:
+        """Register a select entity for state update callbacks."""
+        self._select_entities.append(entity)
+
+    def _notify_state_changed(self) -> None:
+        """Notify all registered entities that state has changed."""
         if self._thermostat_entity is not None:
             self._thermostat_entity.async_write_ha_state()
-
-    async def async_initialize(self) -> None:
-        """Initialize coordinator by reading current state of underlying entities."""
-        for entity_config in self.entity_configs:
-            entity_id = entity_config[CONF_ENTITY_ID]
-            state = self.hass.states.get(entity_id)
-            if state and state.state in (HVACMode.HEAT, HVACMode.COOL):
-                if self._hvac_mode is None:
-                    self._hvac_mode = HVACMode(state.state)
-                return
-
-        # Default to HEAT if no valid state found
-        if self._hvac_mode is None:
-            self._hvac_mode = HVACMode.HEAT
+        for select_entity in self._select_entities:
+            select_entity.async_write_ha_state()
 
     def set_entity_preset(self, entity_id: str, preset: str) -> None:
         """Set the preset for a specific entity."""
@@ -125,13 +113,15 @@ class MiniSplitThermostatCoordinator:
             _LOGGER.warning("Invalid preset: %s", preset)
             return
         self._entity_presets[entity_id] = preset
+        self._notify_state_changed()
 
     async def async_set_hvac_mode(self, mode: HVACMode) -> None:
         """Set the HVAC mode for all underlying entities."""
-        if mode not in (HVACMode.HEAT, HVACMode.COOL):
+        if mode not in (HVACMode.HEAT, HVACMode.COOL, HVACMode.OFF):
             _LOGGER.warning("Unsupported HVAC mode: %s", mode)
             return
         self._hvac_mode = mode
+        self._notify_state_changed()
 
     def get_target_temp(self, entity_id: str) -> float:
         """Get the target temperature for an entity based on its preset and current mode."""
@@ -168,16 +158,14 @@ class MiniSplitThermostatCoordinator:
         entity_ids = [e[CONF_ENTITY_ID] for e in self.entity_configs]
 
         @callback
-        def _async_state_changed(event: Event) -> None:
+        def _async_state_changed(event: Any) -> None:
             """Handle state change of an underlying entity."""
-            if self._thermostat_entity is not None:
-                self._thermostat_entity.async_schedule_update_ha_state()
+            self._notify_state_changed()
 
-        for entity_id in entity_ids:
-            remove_tracker = async_track_state_change_event(
-                self.hass, entity_ids, _async_state_changed
-            )
-            self._remove_trackers.append(remove_tracker)
+        tracker = async_track_state_change_event(
+            self.hass, entity_ids, _async_state_changed
+        )
+        self._remove_trackers.append(tracker)
 
     def cleanup(self) -> None:
         """Remove all state change listeners."""
@@ -209,18 +197,19 @@ async def async_setup_entry(
 
     async_add_entities([thermostat])
 
-    await coordinator.async_initialize()
     coordinator.setup_state_listeners()
 
 
 class MultiZoneMinisplitThermostat(ClimateEntity):
-    """Representation of a multi-zone mini-split thermostat."""
+    """Representation of a multi-zone mini-split thermostat.
+
+    This entity acts as a group mode controller. It does not expose
+    a single target temperature or preset mode, since those are managed
+    per-zone via separate select entities.
+    """
 
     _attr_has_entity_name = True
-    _attr_supported_features = (
-        ClimateEntityFeature.TARGET_TEMPERATURE
-        | ClimateEntityFeature.TURN_OFF
-    )
+    _attr_supported_features = ClimateEntityFeature.TURN_OFF
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.COOL, HVACMode.OFF]
     _attr_temperature_unit = UnitOfTemperature.FAHRENHEIT
 
@@ -263,17 +252,10 @@ class MultiZoneMinisplitThermostat(ClimateEntity):
         return mean(temps) if temps else None
 
     @property
-    def target_temperature(self) -> float:
-        """Return the average target temperature across all entities."""
-        temps = list(self.coordinator.get_all_target_temps().values())
-        if not temps:
-            return DEFAULT_HEAT_TEMP
-        return round(mean(temps), 1)
-
-    @property
     def hvac_mode(self) -> HVACMode:
         """Return the current HVAC mode."""
-        return self.coordinator.hvac_mode or HVACMode.HEAT
+        mode = self.coordinator.hvac_mode
+        return mode if mode is not None else HVACMode.HEAT
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -297,35 +279,12 @@ class MultiZoneMinisplitThermostat(ClimateEntity):
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set the HVAC mode for all underlying entities."""
-        if hvac_mode == HVACMode.OFF:
-            # Turn off all underlying entities
-            self.coordinator._hvac_mode = HVACMode.OFF
-            for entity_config in self.coordinator.entity_configs:
-                entity_id = entity_config[CONF_ENTITY_ID]
-                await self.hass.services.async_call(
-                    "climate",
-                    "set_hvac_mode",
-                    {"entity_id": entity_id, "hvac_mode": HVACMode.OFF},
-                )
-        elif hvac_mode in (HVACMode.HEAT, HVACMode.COOL):
-            await self.coordinator.async_set_hvac_mode(hvac_mode)
-            for entity_config in self.coordinator.entity_configs:
-                entity_id = entity_config[CONF_ENTITY_ID]
-                await self.hass.services.async_call(
-                    "climate",
-                    "set_hvac_mode",
-                    {"entity_id": entity_id, "hvac_mode": hvac_mode},
-                )
+        await self.coordinator.async_set_hvac_mode(hvac_mode)
 
-        self.async_write_ha_state()
-
-    async def async_set_temperature(self, **kwargs: Any) -> None:
-        """Set temperature.
-
-        For mini-splits, this stores the preference but doesn't directly
-        control equipment. The actual target temps are derived from preset
-        configurations.
-        """
-        if ATTR_TEMPERATURE in kwargs:
-            self._attr_target_temperature = kwargs[ATTR_TEMPERATURE]
-            self.async_write_ha_state()
+        for entity_config in self.coordinator.entity_configs:
+            entity_id = entity_config[CONF_ENTITY_ID]
+            await self.hass.services.async_call(
+                "climate",
+                "set_hvac_mode",
+                {"entity_id": entity_id, "hvac_mode": hvac_mode},
+            )

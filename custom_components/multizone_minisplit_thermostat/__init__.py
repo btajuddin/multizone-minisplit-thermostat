@@ -26,7 +26,7 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.CLIMATE]
+PLATFORMS = [Platform.CLIMATE, Platform.SELECT]
 
 # Per-preset temperature configuration schema (shared across all entities)
 PRESET_CONFIG_SCHEMA = vol.Schema({
@@ -70,6 +70,11 @@ def _register_coordinator(coordinator: "MiniSplitThermostatCoordinator") -> None
 def _unregister_coordinator(entry_id: str) -> None:
     """Unregister a coordinator."""
     _coordinators.pop(entry_id, None)
+
+
+def _get_coordinator(entry_id: str) -> "MiniSplitThermostatCoordinator | None":
+    """Get a coordinator by entry_id."""
+    return _coordinators.get(entry_id)
 
 
 def _find_coordinator_for_entity(entity_id: str) -> "MiniSplitThermostatCoordinator | None":

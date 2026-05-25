@@ -56,5 +56,17 @@
         }
       }
     }
+  },
+  "entity": {
+    "select": {
+      "zone_preset": {
+        "name": "Zone Preset",
+        "state": {
+          "comfort": "Comfort",
+          "eco": "Eco",
+          "failsafe": "Failsafe"
+        }
+      }
+    }
   }
 }
