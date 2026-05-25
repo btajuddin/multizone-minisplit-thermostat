@@ -55,7 +55,13 @@ class MiniSplitThermostatCoordinator:
         """Initialize the coordinator."""
         self.hass = hass
         self.entry_id = entry.entry_id
-        self._entry_name = entry.data.get(CONF_NAME) or entry.title or entry.entry_id
+        # Get name from config data, entry title, or fallback
+        name = entry.data.get(CONF_NAME)
+        if not name:
+            name = entry.title
+        if not name:
+            name = "Multi-Zone Thermostat"
+        self._entry_name = name
         self.zone_configs = zone_configs
         self._preset_configs: dict[str, dict[str, float]] = preset_configs
         self._zone_presets: dict[str, str] = {}
