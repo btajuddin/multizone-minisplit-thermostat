@@ -25,7 +25,8 @@
         "description": "Add a climate zone to this thermostat group.",
         "data": {
           "entity_id": "Climate Zone Entity ID",
-          "default_preset": "Default Preset"
+          "default_preset": "Default Preset",
+          "priority": "Zone Priority (higher = more important for mode decisions)"
         }
       },
       "add_zone_confirm": {

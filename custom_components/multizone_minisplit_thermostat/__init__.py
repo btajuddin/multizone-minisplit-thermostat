@@ -18,7 +18,9 @@ from .const import (
     CONF_DEFAULT_PRESET,
     CONF_ENTITY_ID,
     CONF_PRESET_CONFIGS,
+    CONF_PRIORITY,
     CONF_ZONES,
+    DEFAULT_PRIORITY,
     DOMAIN,
     PRESETS,
     SERVICE_SET_ZONE_PRESET,
@@ -40,6 +42,7 @@ PRESET_CONFIG_SCHEMA = vol.Schema({
 ZONE_CONFIG_SCHEMA = vol.Schema({
     vol.Required(CONF_ENTITY_ID): cv.entity_id,
     vol.Optional(CONF_DEFAULT_PRESET, default="comfort"): vol.In(PRESETS),
+    vol.Optional(CONF_PRIORITY, default=DEFAULT_PRIORITY): vol.Coerce(int),
 })
 
 # Top-level integration schema
@@ -147,6 +150,7 @@ def _async_register_services(hass: HomeAssistant) -> None:
 
         coordinator.set_entity_preset(target_zone, preset)
         # Trigger HA state update for the thermostat
+        await coordinator.async_check_and_update_mode()
         coordinator.async_request_ha_state_update()
 
     hass.services.async_register(

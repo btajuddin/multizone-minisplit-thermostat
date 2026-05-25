@@ -30,14 +30,18 @@ from homeassistant.helpers.event import async_track_state_change_event
 
 from . import _register_coordinator
 from .const import (
+    CONF_DEFAULT_PRESET,
     CONF_ENTITY_ID,
     CONF_PRESET_CONFIGS,
+    CONF_PRIORITY,
     CONF_ZONES,
     DEFAULT_COOL_TEMP,
     DEFAULT_HEAT_TEMP,
+    DEFAULT_PRIORITY,
     DOMAIN,
     PRESET_COMFORT,
     PRESETS,
+    TEMPERATURE_TOLERANCE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -51,6 +55,11 @@ class MiniSplitThermostatCoordinator:
     Preset temperature configurations (heat_temp/cool_temp per preset) are
     shared across all zones. Each zone tracks which preset is currently
     active independently.
+
+    The coordinator automatically determines whether to be in HEAT or COOL
+    mode based on zone temperatures. If any zone is outside its comfort
+    band (target ± tolerance), the mode is set to meet that need. When
+    zones conflict, the highest priority zone wins.
     """
 
     def __init__(
@@ -68,6 +77,7 @@ class MiniSplitThermostatCoordinator:
         self._preset_configs: dict[str, dict[str, float]] = preset_configs
         self._zone_presets: dict[str, str] = {}
         self._hvac_mode: HVACMode | None = None
+        self._auto_mode: bool = True
         self._thermostat_entity: MultiZoneMinisplitThermostat | None = None
         self._select_entities: list["ZonePresetSelect"] = []
         self._remove_trackers: list[CALLBACK_TYPE] = []
@@ -76,7 +86,7 @@ class MiniSplitThermostatCoordinator:
         for zone_config in zone_configs:
             entity_id = zone_config[CONF_ENTITY_ID]
             self._zone_presets[entity_id] = zone_config.get(
-                "default_preset", PRESET_COMFORT
+                CONF_DEFAULT_PRESET, PRESET_COMFORT
             )
 
     @property
@@ -117,7 +127,6 @@ class MiniSplitThermostatCoordinator:
             _LOGGER.warning("Invalid preset: %s", preset)
             return
         self._zone_presets[entity_id] = preset
-        self._notify_state_changed()
 
     async def async_set_hvac_mode(self, mode: HVACMode) -> None:
         """Set the HVAC mode for all underlying zones."""
@@ -125,17 +134,28 @@ class MiniSplitThermostatCoordinator:
             _LOGGER.warning("Unsupported HVAC mode: %s", mode)
             return
         self._hvac_mode = mode
+        if mode == HVACMode.OFF:
+            self._auto_mode = False
         self._notify_state_changed()
+
+    def _get_heat_target(self, entity_id: str) -> float:
+        """Get the heating target temperature for a zone based on its preset."""
+        preset = self._zone_presets.get(entity_id, PRESET_COMFORT)
+        preset_config = self._preset_configs.get(preset, {})
+        return preset_config.get("heat_temp", DEFAULT_HEAT_TEMP)
+
+    def _get_cool_target(self, entity_id: str) -> float:
+        """Get the cooling target temperature for a zone based on its preset."""
+        preset = self._zone_presets.get(entity_id, PRESET_COMFORT)
+        preset_config = self._preset_configs.get(preset, {})
+        return preset_config.get("cool_temp", DEFAULT_COOL_TEMP)
 
     def get_target_temp(self, entity_id: str) -> float:
         """Get the target temperature for a zone based on its preset and current mode."""
-        preset = self._zone_presets.get(entity_id, PRESET_COMFORT)
-        preset_config = self._preset_configs.get(preset, {})
-
         if self._hvac_mode == HVACMode.HEAT:
-            return preset_config.get("heat_temp", DEFAULT_HEAT_TEMP)
+            return self._get_heat_target(entity_id)
         else:
-            return preset_config.get("cool_temp", DEFAULT_COOL_TEMP)
+            return self._get_cool_target(entity_id)
 
     def get_all_target_temps(self) -> dict[str, float]:
         """Get target temperatures for all zones."""
@@ -157,6 +177,96 @@ class MiniSplitThermostatCoordinator:
             "hvac_action": state.attributes.get("hvac_action"),
         }
 
+    def determine_hvac_mode(self) -> HVACMode | None:
+        """Determine the appropriate HVAC mode based on zone temperatures.
+
+        Returns the mode that should be set, or None if no change is needed.
+        A zone needs HEAT if current temp is below heat_target - tolerance.
+        A zone needs COOL if current temp is above cool_target + tolerance.
+        If zones conflict, the highest priority zone wins.
+        """
+        if not self._auto_mode:
+            return None
+
+        heat_zones: list[tuple[int, str]] = []  # (priority, entity_id)
+        cool_zones: list[tuple[int, str]] = []  # (priority, entity_id)
+
+        for zone_config in self.zone_configs:
+            entity_id = zone_config[CONF_ENTITY_ID]
+            priority = zone_config.get(CONF_PRIORITY, DEFAULT_PRIORITY)
+
+            zone_state = self.get_zone_state(entity_id)
+            if zone_state is None:
+                continue
+
+            current_temp = zone_state.get("current_temperature")
+            if current_temp is None:
+                continue
+
+            try:
+                current_temp = float(current_temp)
+            except (ValueError, TypeError):
+                continue
+
+            heat_target = self._get_heat_target(entity_id)
+            cool_target = self._get_cool_target(entity_id)
+
+            if current_temp < heat_target - TEMPERATURE_TOLERANCE:
+                heat_zones.append((priority, entity_id))
+            elif current_temp > cool_target + TEMPERATURE_TOLERANCE:
+                cool_zones.append((priority, entity_id))
+
+        # Both needs detected - highest priority zone wins
+        if heat_zones and cool_zones:
+            max_heat_priority = max(heat_zones, key=lambda x: x[0])
+            max_cool_priority = max(cool_zones, key=lambda x: x[0])
+
+            if max_heat_priority[0] >= max_cool_priority[0]:
+                return HVACMode.HEAT
+            else:
+                return HVACMode.COOL
+
+        if heat_zones:
+            return HVACMode.HEAT
+        if cool_zones:
+            return HVACMode.COOL
+
+        return None  # All zones within comfort band
+
+    async def async_check_and_update_mode(self) -> None:
+        """Check if HVAC mode needs to change and apply it if so."""
+        determined_mode = self.determine_hvac_mode()
+        if determined_mode is None:
+            return
+
+        if determined_mode == self._hvac_mode:
+            return
+
+        _LOGGER.info(
+            "Auto-switching HVAC mode from %s to %s",
+            self._hvac_mode,
+            determined_mode,
+        )
+        self._hvac_mode = determined_mode
+
+        # Propagate mode change to all underlying zones
+        for zone_config in self.zone_configs:
+            entity_id = zone_config[CONF_ENTITY_ID]
+            await self.hass.services.async_call(
+                "climate",
+                "set_hvac_mode",
+                {"entity_id": entity_id, "hvac_mode": determined_mode},
+            )
+            # Set the new target temperature for this zone
+            target_temp = self.get_target_temp(entity_id)
+            await self.hass.services.async_call(
+                "climate",
+                "set_temperature",
+                {"entity_id": entity_id, "temperature": target_temp},
+            )
+
+        self._notify_state_changed()
+
     def setup_state_listeners(self) -> None:
         """Set up state change listeners for underlying zones."""
         entity_ids = [z[CONF_ENTITY_ID] for z in self.zone_configs]
@@ -164,6 +274,7 @@ class MiniSplitThermostatCoordinator:
         @callback
         def _async_state_changed(event: Any) -> None:
             """Handle state change of an underlying zone."""
+            self.hass.async_create_task(self.async_check_and_update_mode())
             self._notify_state_changed()
 
         tracker = async_track_state_change_event(
@@ -200,6 +311,9 @@ async def async_setup_entry(
     coordinator.set_thermostat_entity(thermostat)
 
     async_add_entities([thermostat])
+
+    # Initialize mode from first zone's state
+    await coordinator.async_check_and_update_mode()
 
     coordinator.setup_state_listeners()
 
@@ -274,7 +388,10 @@ class MultiZoneMinisplitThermostat(ClimateEntity):
             entity_id = zone_config[CONF_ENTITY_ID]
             state = self.coordinator.get_zone_state(entity_id)
             attrs["zones"][entity_id] = {
+                "priority": zone_config.get(CONF_PRIORITY, DEFAULT_PRIORITY),
                 "preset": self.coordinator.entity_presets.get(entity_id),
+                "heat_target": self.coordinator._get_heat_target(entity_id),
+                "cool_target": self.coordinator._get_cool_target(entity_id),
                 "target_temp": self.coordinator.get_target_temp(entity_id),
                 "current_state": state,
             }
@@ -282,7 +399,17 @@ class MultiZoneMinisplitThermostat(ClimateEntity):
         return attrs
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        """Set the HVAC mode for all underlying zones."""
+        """Set the HVAC mode for all underlying zones.
+
+        Setting a mode manually disables auto mode switching until
+        the mode is set back to auto (by setting to the determined mode).
+        """
+        if hvac_mode == HVACMode.OFF:
+            self.coordinator._auto_mode = False
+        else:
+            # Re-enable auto mode when user selects heat or cool
+            self.coordinator._auto_mode = True
+
         await self.coordinator.async_set_hvac_mode(hvac_mode)
 
         for zone_config in self.coordinator.zone_configs:

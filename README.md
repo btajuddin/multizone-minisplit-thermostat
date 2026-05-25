@@ -1,22 +1,40 @@
 # Multi-Zone Mini-Split Thermostat
 
-A Home Assistant custom integration that creates a virtual thermostat to manage multiple mini-split climate entities with per-zone preset control.
+A Home Assistant custom integration that creates a virtual thermostat to manage multiple mini-split zones with per-zone preset control and automatic mode switching.
 
 ## Features
 
 - **Group mode control** - set heat, cool, or off mode for all mini-splits at once
-- **Per-zone preset selectors** - each zone has its own select entity for preset (comfort, eco, failsafe)
+- **Automatic mode switching** - automatically switches between heat and cool based on zone temperatures
+- **Per-zone preset selectors** - each zone has its own select input for preset (comfort, eco, failsafe)
 - **Global preset temperatures** - define heating and cooling targets for each preset, shared across all zones
+- **Zone priority** - when zones conflict, the highest priority zone determines the mode
 - **HACS compatible** - easy installation via HACS
 
 ## Architecture
 
 This integration creates two types of entities:
 
-1. **Climate entity** (group controller) - manages HVAC mode (heat/cool/off) for all underlying entities, shows average current temperature, and exposes per-zone state as attributes
+1. **Climate entity** (group controller) - manages HVAC mode (heat/cool/off) for all zones, shows average current temperature, and exposes per-zone state as attributes
 2. **Select entities** (one per zone) - control the active preset for each individual zone
 
 Temperature targets are derived from the global preset configuration and the currently active preset for each zone. The climate entity does not expose a target temperature or preset mode directly since those are managed per-zone.
+
+## Automatic Mode Switching
+
+The integration automatically determines whether to operate in HEAT or COOL mode based on zone temperatures:
+
+- Each zone has a **comfort band** defined by its preset's heating and cooling targets
+- If a zone's current temperature drops below `heat_target - 1°F`, it needs HEAT
+- If a zone's current temperature rises above `cool_target + 1°F`, it needs COOL
+- If all zones are within their comfort bands, the mode does not change
+- If zones conflict (some need heat, some need cool), the **highest priority zone** wins
+
+Setting the mode manually to HEAT or COOL keeps auto-switching enabled. Setting it to OFF disables auto-switching.
+
+## Zone Priority
+
+Each zone has a priority value (integer, default: 0). When zones have conflicting needs, the zone with the highest priority determines the system mode. Use higher priority for zones with sensitive equipment or critical comfort requirements.
 
 ## Installation
 
@@ -43,7 +61,7 @@ Temperature targets are derived from the global preset configuration and the cur
 3. Follow the setup wizard:
    - Name your thermostat
    - Configure preset temperatures (heat/cool targets for comfort, eco, failsafe)
-   - Add climate entities one by one, selecting a default preset for each
+   - Add zones one by one, selecting a default preset and priority for each
 
 ### Via YAML
 
@@ -63,13 +81,16 @@ multizone_minisplit_thermostat:
       failsafe:
         heat_temp: 60
         cool_temp: 85
-    entities:
-      - entity_id: climate.living_room_minisplit
+    zones:
+      - entity_id: climate.server_room
+        default_preset: failsafe
+        priority: 100
+      - entity_id: climate.living_room
         default_preset: comfort
-      - entity_id: climate.bedroom_minisplit
-        default_preset: eco
-      - entity_id: climate.kitchen_minisplit
+        priority: 10
+      - entity_id: climate.bedroom
         default_preset: comfort
+        priority: 0
 ```
 
 ## Configuration Options
@@ -80,9 +101,10 @@ multizone_minisplit_thermostat:
 | `presets` | No | Global preset temperature configuration (shared across all zones) |
 | `heat_temp` | No | Target temperature when in heat mode for this preset (default: 68°F) |
 | `cool_temp` | No | Target temperature when in cool mode for this preset (default: 74°F) |
-| `entities` | Yes | List of climate entities to manage |
+| `zones` | Yes | List of climate zones to manage |
 | `entity_id` | Yes | The climate entity ID (e.g., `climate.living_room`) |
 | `default_preset` | No | Default preset for this zone when the integration starts (default: `comfort`) |
+| `priority` | No | Zone priority for mode conflict resolution (default: 0, higher = more important) |
 
 ## Entities
 
@@ -90,36 +112,36 @@ multizone_minisplit_thermostat:
 
 The main climate entity provides:
 - **HVAC mode control** - heat, cool, or off (propagates to all zones)
-- **Current temperature** - average across all underlying entities
-- **Attributes** - per-zone preset, target temperature, and raw state
+- **Current temperature** - average across all zones
+- **Attributes** - per-zone preset, priority, heat/cool targets, current target temperature, and raw state
 
 ### Select Entities (Per-Zone Preset)
 
 One select entity is created for each zone:
 - **Name**: `{Thermostat Name} - {Zone Name} Preset`
 - **Options**: `comfort`, `eco`, `failsafe`
-- **Attributes**: underlying entity ID, current target temperature
+- **Attributes**: zone's entity ID, current target temperature
 
 Changing the select updates the zone's preset, which recalculates its target temperature based on the global preset configuration and current HVAC mode.
 
 ## Services
 
-### `multizone_minisplit_thermostat.set_entity_preset`
+### `multizone_minisplit_thermostat.set_zone_preset`
 
-Set the preset for a specific underlying climate entity (alternative to using the select entity).
+Set the preset for a specific zone (alternative to using the select entity).
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `entity` | Yes | The underlying climate entity ID |
+| `zone` | Yes | The climate entity ID of the zone |
 | `preset` | Yes | The preset to apply (`comfort`, `eco`, or `failsafe`) |
 
 #### Example
 
 ```yaml
 # Set bedroom to eco mode (energy saving)
-service: multizone_minisplit_thermostat.set_entity_preset
+service: multizone_minisplit_thermostat.set_zone_preset
 data:
-  entity: climate.bedroom_minisplit
+  zone: climate.bedroom_minisplit
   preset: eco
 ```
 
@@ -137,16 +159,26 @@ data:
 ┌─────────────────────────────────────────┐
 │   Climate Entity (Group Controller)      │
 │                                          │
-│   Mode: HEAT (controls all zones)        │
+│   Mode: HEAT (auto-switched)             │
 │   Current Temp: 71°F (avg)              │
 │                                          │
 │   Attributes:                            │
-│   - entity_presets: {...}                │
-│   - entity_target_temps: {...}           │
-│   - entities: {...}                      │
+│   - zone_presets: {...}                  │
+│   - zone_target_temps: {...}             │
+│   - zones: {                             │
+│       climate.server_room: {             │
+│         priority: 100,                   │
+│         preset: failsafe,                │
+│         heat_target: 60°F,               │
+│         cool_target: 85°F,               │
+│         target_temp: 60°F,               │
+│         ...                              │
+│       },                                 │
+│       ...                                │
+│     }                                    │
 └─────────────────────────────────────────┘
           │
-          ├──▶ Select: LR Preset → comfort (70°F)
-          ├──▶ Select: BR Preset → eco (65°F)
-          └──▶ Select: KT Preset → comfort (70°F)
+          ├──▶ Select: Server Room Preset → failsafe
+          ├──▶ Select: Living Room Preset → comfort
+          └──▶ Select: Bedroom Preset → comfort
 ```

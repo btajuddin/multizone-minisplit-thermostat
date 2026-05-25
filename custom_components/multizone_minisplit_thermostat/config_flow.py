@@ -16,7 +16,9 @@ from .const import (
     CONF_DEFAULT_PRESET,
     CONF_ENTITY_ID,
     CONF_PRESET_CONFIGS,
+    CONF_PRIORITY,
     CONF_ZONES,
+    DEFAULT_PRIORITY,
     DOMAIN,
     PRESETS,
 )
@@ -28,6 +30,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema({
 STEP_ADD_ZONE_SCHEMA = vol.Schema({
     vol.Required(CONF_ENTITY_ID): str,
     vol.Optional(CONF_DEFAULT_PRESET, default="comfort"): vol.In(PRESETS),
+    vol.Optional(CONF_PRIORITY, default=DEFAULT_PRIORITY): int,
 })
 
 
@@ -117,6 +120,7 @@ class MultizoneMinisplitThermostatFlowHandler(
             zone_config = {
                 CONF_ENTITY_ID: user_input[CONF_ENTITY_ID],
                 CONF_DEFAULT_PRESET: user_input.get(CONF_DEFAULT_PRESET, "comfort"),
+                CONF_PRIORITY: user_input.get(CONF_PRIORITY, DEFAULT_PRIORITY),
             }
             self._zones.append(zone_config)
 

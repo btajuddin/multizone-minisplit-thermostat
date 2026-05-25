@@ -18,6 +18,7 @@ CONF_ZONES = "zones"
 CONF_ENTITY_ID = "entity_id"
 CONF_PRESET_CONFIGS = "presets"
 CONF_DEFAULT_PRESET = "default_preset"
+CONF_PRIORITY = "priority"
 
 # Per-preset temperature keys (shared across all zones)
 CONF_HEAT_TEMP = "heat_temp"
@@ -35,3 +36,7 @@ ATTR_PRESET = "preset"
 # Defaults
 DEFAULT_HEAT_TEMP = 68.0
 DEFAULT_COOL_TEMP = 74.0
+DEFAULT_PRIORITY = 0
+
+# Auto mode control
+TEMPERATURE_TOLERANCE = 1.0  # degrees F before triggering mode change
