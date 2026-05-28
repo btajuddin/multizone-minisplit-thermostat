@@ -18,6 +18,7 @@ from .const import (
     CONF_DEFAULT_PRESET,
     CONF_DEBOUNCE_INTERVAL,
     CONF_DEBOUNCE_THRESHOLD,
+    CONF_ENABLE_OFFSET_LEARNING,
     CONF_ENTITY_ID,
     CONF_OUTSIDE_TEMP_ENTITY,
     CONF_PRESET_CONFIGS,
@@ -37,7 +38,7 @@ from .coordinator import MiniSplitThermostatCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.SELECT, Platform.NUMBER, Platform.SENSOR]
+PLATFORMS = [Platform.SELECT, Platform.NUMBER, Platform.SENSOR, Platform.SWITCH]
 
 # Per-preset temperature configuration schema (shared across all zones)
 PRESET_CONFIG_SCHEMA = vol.Schema({
@@ -63,6 +64,7 @@ INTEGRATION_SCHEMA = vol.Schema({
     vol.Optional(CONF_OUTSIDE_TEMP_ENTITY): cv.entity_id,
     vol.Optional(CONF_DEBOUNCE_INTERVAL, default=DEFAULT_DEBOUNCE_INTERVAL): vol.Coerce(int),
     vol.Optional(CONF_DEBOUNCE_THRESHOLD, default=DEFAULT_DEBOUNCE_THRESHOLD): vol.Coerce(float),
+    vol.Optional(CONF_ENABLE_OFFSET_LEARNING, default=True): cv.boolean,
 })
 
 CONFIG_SCHEMA = vol.Schema(
@@ -144,6 +146,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     outside_temp_entity = merged_data.get(CONF_OUTSIDE_TEMP_ENTITY)
     debounce_interval = merged_data.get(CONF_DEBOUNCE_INTERVAL, DEFAULT_DEBOUNCE_INTERVAL)
     debounce_threshold = merged_data.get(CONF_DEBOUNCE_THRESHOLD, DEFAULT_DEBOUNCE_THRESHOLD)
+    enable_offset_learning = merged_data.get(CONF_ENABLE_OFFSET_LEARNING, True)
 
     coordinator = MiniSplitThermostatCoordinator(
         hass=hass,
@@ -153,6 +156,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         outside_temp_entity=outside_temp_entity,
         debounce_interval=debounce_interval,
         debounce_threshold=debounce_threshold,
+        enable_offset_learning=enable_offset_learning,
     )
     _register_coordinator(coordinator)
     coordinator.setup_state_listeners()

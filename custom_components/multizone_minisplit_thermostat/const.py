@@ -48,6 +48,7 @@ CONF_OUTSIDE_TEMP_ENTITY = "outside_temp_entity"
 CONF_SLEEP_MODE_ENTITY = "sleep_mode_entity"
 CONF_DEBOUNCE_INTERVAL = "debounce_interval"
 CONF_DEBOUNCE_THRESHOLD = "debounce_threshold"
+CONF_ENABLE_OFFSET_LEARNING = "enable_offset_learning"
 
 # Offset learning and debounce defaults
 DEFAULT_DEBOUNCE_INTERVAL = 900  # 15 minutes in seconds

@@ -19,6 +19,7 @@ from homeassistant.helpers.storage import Store
 
 from .const import (
     CONF_DEFAULT_PRESET,
+    CONF_ENABLE_OFFSET_LEARNING,
     CONF_ENTITY_ID,
     CONF_PRIORITY,
     CONF_SLEEP_MODE_ENTITY,
@@ -71,6 +72,7 @@ class MiniSplitThermostatCoordinator:
         outside_temp_entity: str | None = None,
         debounce_interval: int = DEFAULT_DEBOUNCE_INTERVAL,
         debounce_threshold: float = DEFAULT_DEBOUNCE_THRESHOLD,
+        enable_offset_learning: bool = True,
     ) -> None:
         """Initialize the coordinator."""
         self.hass = hass
@@ -101,6 +103,7 @@ class MiniSplitThermostatCoordinator:
         self._outside_temp_entity = outside_temp_entity
         self._debounce_interval = debounce_interval
         self._debounce_threshold = debounce_threshold
+        self._enable_offset_learning = enable_offset_learning
         self._last_temp_adjust_time: dict[str, float] = {}
         self._current_offsets: dict[str, float] = {}
         self._offset_learners: dict[str, OffsetLearner] = {}
@@ -140,6 +143,26 @@ class MiniSplitThermostatCoordinator:
         """Return the offset learners per zone."""
         return dict(self._offset_learners)
 
+    @property
+    def outside_temp_entity(self) -> str | None:
+        """Return the outside temperature entity."""
+        return self._outside_temp_entity
+
+    @property
+    def offset_learning_enabled(self) -> bool:
+        """Return whether offset learning is enabled."""
+        return self._enable_offset_learning
+
+    async def async_set_offset_learning_enabled(self, enabled: bool) -> None:
+        """Enable or disable offset learning."""
+        self._enable_offset_learning = enabled
+        if enabled and self._outside_temp_entity and not self._offset_learners:
+            await self.async_init_offset_learning()
+        elif not enabled:
+            self._current_offsets = {k: 0.0 for k in self._current_offsets}
+            await self.async_push_temperatures()
+        self._notify_state_changed()
+
     def add_select_entity(self, entity: Any) -> None:
         """Register a select entity for state update callbacks."""
         self._select_entities.append(entity)
@@ -168,6 +191,10 @@ class MiniSplitThermostatCoordinator:
         """Initialize offset learning system and load persisted data."""
         if self._outside_temp_entity is None:
             _LOGGER.debug("No outside temperature entity configured, offset learning disabled")
+            return
+
+        if not self._enable_offset_learning:
+            _LOGGER.debug("Offset learning is disabled")
             return
 
         self._storage = Store(
@@ -249,6 +276,9 @@ class MiniSplitThermostatCoordinator:
         if entity_id not in self._offset_learners:
             return
 
+        if not self._enable_offset_learning:
+            return
+
         outside_temp = self._get_outside_temp()
         if outside_temp is None:
             return
@@ -289,6 +319,9 @@ class MiniSplitThermostatCoordinator:
         outside_temp = self._get_outside_temp()
         if outside_temp is None:
             _LOGGER.debug("Outside temperature unavailable, skipping offset recalculation")
+            return
+
+        if not self._enable_offset_learning:
             return
 
         any_changed = False
@@ -624,11 +657,11 @@ class MiniSplitThermostatCoordinator:
 
             # Record data point for offset learning
             changed_entity = event.data.get("entity_id")
-            if changed_entity in self._offset_learners:
+            if self._enable_offset_learning and changed_entity in self._offset_learners:
                 self.hass.async_create_task(self.async_record_data_point(changed_entity))
 
             # Recalculate offsets if outside temp changed
-            if changed_entity == self._outside_temp_entity:
+            if self._enable_offset_learning and changed_entity == self._outside_temp_entity:
                 now = time.time()
                 if now - self._last_recalc_time >= OFFSET_RECALC_INTERVAL:
                     self.hass.async_create_task(self.async_recalculate_offsets())

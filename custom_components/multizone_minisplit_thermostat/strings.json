@@ -24,7 +24,8 @@
         "title": "Outside Temperature Sensor",
         "description": "{info}",
         "data": {
-          "outside_temp_entity": "Outside Temperature Entity"
+          "outside_temp_entity": "Outside Temperature Entity",
+          "enable_offset_learning": "Enable Offset Learning"
         }
       },
       "add_zone": {
@@ -113,6 +114,14 @@
           "debounce_interval": "Debounce Interval",
           "debounce_threshold": "Debounce Threshold"
         }
+      },
+      "offset_learning": {
+        "title": "Offset Learning",
+        "description": "Configure offset learning settings.",
+        "data": {
+          "outside_temp_entity": "Outside Temperature Entity",
+          "enable_offset_learning": "Enable Offset Learning"
+        }
       }
     },
     "error": {
@@ -194,6 +203,11 @@
       },
       "offset_samples": {
         "name": "Offset Samples"
+      }
+    },
+    "switch": {
+      "offset_learning": {
+        "name": "Offset Learning"
       }
     }
   }

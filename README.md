@@ -9,7 +9,7 @@ A Home Assistant custom integration that creates a virtual thermostat to manage 
 - **Per-zone preset selectors** - each zone has its own select input for preset (comfort, eco, failsafe)
 - **Global preset temperatures** - define heating and cooling targets for each preset, shared across all zones
 - **Zone priority** - when zones conflict, the highest priority zone determines the mode
-- **Offset learning** - ML-based regression that learns the temperature offset between zone thermostats and mini-splits using outside temperature as a predictor
+- **Offset learning** - ML-based regression that learns the temperature offset between zone thermostats and mini-splits using outside temperature as a predictor; toggleable via config or runtime switch entity
 - **Per-zone sleep mode** - prevents continuous beeping adjustments in zones (e.g., bedrooms) during sleep by forcing a preset, while still allowing mode switching
 - **Debounce system** - prevents rapid or tiny temperature adjustments to mini-splits
 - **HACS compatible** - easy installation via HACS
@@ -141,6 +141,7 @@ multizone_minisplit_thermostat:
   main_thermostat:
     name: "Whole House Thermostat"
     outside_temp_entity: "sensor.outside_temperature"
+    enable_offset_learning: true
     debounce_interval: 900
     debounce_threshold: 0.5
     presets:
@@ -175,6 +176,7 @@ multizone_minisplit_thermostat:
 | `heat_temp` | No | Target temperature when in heat mode for this preset (default: 68°F) |
 | `cool_temp` | No | Target temperature when in cool mode for this preset (default: 74°F) |
 | `outside_temp_entity` | No | Entity ID for outside temperature sensor (enables offset learning) |
+| `enable_offset_learning` | No | Enable offset learning system (default: true, requires `outside_temp_entity`) |
 | `debounce_interval` | No | Minimum seconds between temperature adjustments (default: 900 / 15 min) |
 | `debounce_threshold` | No | Minimum offset change in °F to trigger adjustment (default: 0.5) |
 | `zones` | Yes | List of climate zones to manage |
@@ -227,6 +229,12 @@ Two sensor entities are created per zone when offset learning is enabled:
 - **Purpose**: Monitor offset learning progress and current model
 - **Learned Offset attributes**: `slope`, `intercept`, `sample_count`, `has_model`, `last_calculation`
 
+### Switch Entities
+
+- **Offset Learning**: Toggle to enable/disable the offset learning system at runtime
+  - When disabled, learned offsets are reset to zero and no new data is collected
+  - Requires an outside temperature entity to be configured
+
 ## Services
 
 ### `multizone_minisplit_thermostat.set_zone_preset`
@@ -278,6 +286,7 @@ Clear learned offset data.
 │   │  Number: Failsafe Cooling Target → 85°F                   │ │
 │   │  Number: Debounce Interval → 900s                         │ │
 │   │  Number: Debounce Threshold → 0.5°F                       │ │
+│   │  Switch: Offset Learning → On                             │ │
 │   └───────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
        │                    │                    │

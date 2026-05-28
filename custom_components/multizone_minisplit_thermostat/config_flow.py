@@ -17,6 +17,7 @@ from .const import (
     CONF_DEFAULT_PRESET,
     CONF_DEBOUNCE_INTERVAL,
     CONF_DEBOUNCE_THRESHOLD,
+    CONF_ENABLE_OFFSET_LEARNING,
     CONF_ENTITY_ID,
     CONF_OUTSIDE_TEMP_ENTITY,
     CONF_PRESET_CONFIGS,
@@ -64,6 +65,7 @@ class MultizoneMinisplitThermostatFlowHandler(
         self._outside_temp_entity: str | None = None
         self._debounce_interval: int = DEFAULT_DEBOUNCE_INTERVAL
         self._debounce_threshold: float = DEFAULT_DEBOUNCE_THRESHOLD
+        self._enable_offset_learning: bool = True
 
     async def async_step_import(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle YAML import."""
@@ -133,6 +135,7 @@ class MultizoneMinisplitThermostatFlowHandler(
         """Configure outside temperature entity for offset learning."""
         if user_input is not None:
             self._outside_temp_entity = user_input.get(CONF_OUTSIDE_TEMP_ENTITY)
+            self._enable_offset_learning = user_input.get(CONF_ENABLE_OFFSET_LEARNING, True)
             return await self.async_step_add_zone()
 
         return self.async_show_form(
@@ -140,6 +143,9 @@ class MultizoneMinisplitThermostatFlowHandler(
             data_schema=vol.Schema({
                 vol.Optional(CONF_OUTSIDE_TEMP_ENTITY): selector({
                     "entity": {"domain": ["sensor", "weather", "input_number"]}
+                }),
+                vol.Optional(CONF_ENABLE_OFFSET_LEARNING, default=True): selector({
+                    "boolean": {}
                 }),
             }),
             description_placeholders={
@@ -214,6 +220,7 @@ class MultizoneMinisplitThermostatFlowHandler(
         }
         if self._outside_temp_entity:
             data[CONF_OUTSIDE_TEMP_ENTITY] = self._outside_temp_entity
+            data[CONF_ENABLE_OFFSET_LEARNING] = self._enable_offset_learning
         data[CONF_DEBOUNCE_INTERVAL] = self._debounce_interval
         data[CONF_DEBOUNCE_THRESHOLD] = self._debounce_threshold
 
@@ -263,6 +270,8 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
                 return await self.async_step_remove_zone()
             elif action == "outside_temp":
                 return await self.async_step_outside_temp()
+            elif action == "offset_learning":
+                return await self.async_step_offset_learning()
             elif action == "debounce":
                 return await self.async_step_debounce_config()
             return await self.async_step_finalize()
@@ -284,6 +293,7 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
                             {"value": "add", "label": "Add a zone"},
                             {"value": "remove", "label": "Remove a zone"},
                             {"value": "outside_temp", "label": "Outside temperature sensor"},
+                            {"value": "offset_learning", "label": "Offset learning"},
                             {"value": "debounce", "label": "Debounce settings"},
                             {"value": "done", "label": "Done"},
                         ],
@@ -315,6 +325,32 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
             data_schema=vol.Schema({
                 vol.Optional(CONF_OUTSIDE_TEMP_ENTITY, default=current_entity): selector({
                     "entity": {"domain": ["sensor", "weather", "input_number"]}
+                }),
+            }),
+        )
+
+    async def async_step_offset_learning(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Configure offset learning settings."""
+        merged = {**self.config_entry.data, **self.config_entry.options}
+        current_entity = merged.get(CONF_OUTSIDE_TEMP_ENTITY)
+        current_enabled = merged.get(CONF_ENABLE_OFFSET_LEARNING, True)
+
+        if user_input is not None:
+            current_options = dict(self.config_entry.options)
+            current_options[CONF_OUTSIDE_TEMP_ENTITY] = user_input.get(CONF_OUTSIDE_TEMP_ENTITY)
+            current_options[CONF_ENABLE_OFFSET_LEARNING] = user_input.get(CONF_ENABLE_OFFSET_LEARNING, True)
+            return self.async_create_entry(data=current_options)
+
+        return self.async_show_form(
+            step_id="offset_learning",
+            data_schema=vol.Schema({
+                vol.Optional(CONF_OUTSIDE_TEMP_ENTITY, default=current_entity): selector({
+                    "entity": {"domain": ["sensor", "weather", "input_number"]}
+                }),
+                vol.Optional(CONF_ENABLE_OFFSET_LEARNING, default=current_enabled): selector({
+                    "boolean": {}
                 }),
             }),
         )
