@@ -72,7 +72,7 @@ class MiniSplitThermostatCoordinator:
         outside_temp_entity: str | None = None,
         debounce_interval: int = DEFAULT_DEBOUNCE_INTERVAL,
         debounce_threshold: float = DEFAULT_DEBOUNCE_THRESHOLD,
-        enable_offset_learning: bool = True,
+        enable_offset_learning: bool = False,
     ) -> None:
         """Initialize the coordinator."""
         self.hass = hass
