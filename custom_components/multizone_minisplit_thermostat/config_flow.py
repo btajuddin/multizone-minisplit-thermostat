@@ -65,7 +65,7 @@ class MultizoneMinisplitThermostatFlowHandler(
         self._outside_temp_entity: str | None = None
         self._debounce_interval: int = DEFAULT_DEBOUNCE_INTERVAL
         self._debounce_threshold: float = DEFAULT_DEBOUNCE_THRESHOLD
-        self._enable_offset_learning: bool = False
+        self._enable_offset_learning: bool = True
 
     async def async_step_import(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle YAML import."""
@@ -135,7 +135,7 @@ class MultizoneMinisplitThermostatFlowHandler(
         """Configure outside temperature entity for offset learning."""
         if user_input is not None:
             self._outside_temp_entity = user_input.get(CONF_OUTSIDE_TEMP_ENTITY)
-            self._enable_offset_learning = user_input.get(CONF_ENABLE_OFFSET_LEARNING, False)
+            self._enable_offset_learning = user_input.get(CONF_ENABLE_OFFSET_LEARNING, True)
             return await self.async_step_add_zone()
 
         return self.async_show_form(
@@ -144,7 +144,7 @@ class MultizoneMinisplitThermostatFlowHandler(
                 vol.Optional(CONF_OUTSIDE_TEMP_ENTITY): selector({
                     "entity": {"domain": ["sensor", "weather", "input_number"]}
                 }),
-                vol.Optional(CONF_ENABLE_OFFSET_LEARNING, default=False): selector({
+                vol.Optional(CONF_ENABLE_OFFSET_LEARNING, default=True): selector({
                     "boolean": {}
                 }),
             }),
@@ -335,12 +335,12 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
         """Configure offset learning settings."""
         merged = {**self.config_entry.data, **self.config_entry.options}
         current_entity = merged.get(CONF_OUTSIDE_TEMP_ENTITY)
-        current_enabled = merged.get(CONF_ENABLE_OFFSET_LEARNING, False)
+        current_enabled = merged.get(CONF_ENABLE_OFFSET_LEARNING, True)
 
         if user_input is not None:
             current_options = dict(self.config_entry.options)
             current_options[CONF_OUTSIDE_TEMP_ENTITY] = user_input.get(CONF_OUTSIDE_TEMP_ENTITY)
-            current_options[CONF_ENABLE_OFFSET_LEARNING] = user_input.get(CONF_ENABLE_OFFSET_LEARNING, False)
+            current_options[CONF_ENABLE_OFFSET_LEARNING] = user_input.get(CONF_ENABLE_OFFSET_LEARNING, True)
             return self.async_create_entry(data=current_options)
 
         return self.async_show_form(

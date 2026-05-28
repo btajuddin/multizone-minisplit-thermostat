@@ -64,7 +64,7 @@ INTEGRATION_SCHEMA = vol.Schema({
     vol.Optional(CONF_OUTSIDE_TEMP_ENTITY): cv.entity_id,
     vol.Optional(CONF_DEBOUNCE_INTERVAL, default=DEFAULT_DEBOUNCE_INTERVAL): vol.Coerce(int),
     vol.Optional(CONF_DEBOUNCE_THRESHOLD, default=DEFAULT_DEBOUNCE_THRESHOLD): vol.Coerce(float),
-    vol.Optional(CONF_ENABLE_OFFSET_LEARNING, default=False): cv.boolean,
+    vol.Optional(CONF_ENABLE_OFFSET_LEARNING, default=True): cv.boolean,
 })
 
 CONFIG_SCHEMA = vol.Schema(
@@ -146,7 +146,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     outside_temp_entity = merged_data.get(CONF_OUTSIDE_TEMP_ENTITY)
     debounce_interval = merged_data.get(CONF_DEBOUNCE_INTERVAL, DEFAULT_DEBOUNCE_INTERVAL)
     debounce_threshold = merged_data.get(CONF_DEBOUNCE_THRESHOLD, DEFAULT_DEBOUNCE_THRESHOLD)
-    enable_offset_learning = merged_data.get(CONF_ENABLE_OFFSET_LEARNING, False)
+    enable_offset_learning = merged_data.get(CONF_ENABLE_OFFSET_LEARNING, True)
 
     coordinator = MiniSplitThermostatCoordinator(
         hass=hass,

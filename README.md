@@ -141,7 +141,7 @@ multizone_minisplit_thermostat:
   main_thermostat:
     name: "Whole House Thermostat"
     outside_temp_entity: "sensor.outside_temperature"
-    enable_offset_learning: false
+    enable_offset_learning: true
     debounce_interval: 900
     debounce_threshold: 0.5
     presets:
@@ -176,7 +176,7 @@ multizone_minisplit_thermostat:
 | `heat_temp` | No | Target temperature when in heat mode for this preset (default: 68°F) |
 | `cool_temp` | No | Target temperature when in cool mode for this preset (default: 74°F) |
 | `outside_temp_entity` | No | Entity ID for outside temperature sensor (enables offset learning) |
-| `enable_offset_learning` | No | Enable offset learning system (default: false, requires `outside_temp_entity`) |
+| `enable_offset_learning` | No | Enable offset learning system (default: true, requires `outside_temp_entity`) |
 | `debounce_interval` | No | Minimum seconds between temperature adjustments (default: 900 / 15 min) |
 | `debounce_threshold` | No | Minimum offset change in °F to trigger adjustment (default: 0.5) |
 | `zones` | Yes | List of climate zones to manage |
