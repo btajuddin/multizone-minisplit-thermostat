@@ -164,7 +164,6 @@ multizone_minisplit_thermostat:
         default_preset: comfort
         priority: 0
         sleep_mode_entity: input_boolean.bedroom_sleep
-        sleep_preset: eco
 ```
 
 ## Configuration Options
@@ -183,7 +182,6 @@ multizone_minisplit_thermostat:
 | `default_preset` | No | Default preset for this zone when the integration starts (default: `comfort`) |
 | `priority` | No | Zone priority for mode conflict resolution (default: 0, higher = more important) |
 | `sleep_mode_entity` | No | Entity that controls sleep mode for this zone (e.g., `input_boolean.bedroom_sleep`) |
-| `sleep_preset` | No | Preset to use when sleep mode is active (e.g., `eco`) |
 
 ## Entities
 

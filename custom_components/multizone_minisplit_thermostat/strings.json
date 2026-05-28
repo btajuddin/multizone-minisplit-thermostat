@@ -34,8 +34,7 @@
           "entity_id": "Climate Zone Entity ID",
           "default_preset": "Default Preset",
           "priority": "Zone Priority (higher = more important for mode decisions)",
-          "sleep_mode_entity": "Sleep Mode Entity",
-          "sleep_preset": "Sleep Preset"
+          "sleep_mode_entity": "Sleep Mode Entity"
         }
       },
       "add_zone_confirm": {
@@ -90,8 +89,7 @@
           "entity_id": "Climate Zone Entity ID",
           "default_preset": "Default Preset",
           "priority": "Zone Priority (higher = more important for mode decisions)",
-          "sleep_mode_entity": "Sleep Mode Entity",
-          "sleep_preset": "Sleep Preset"
+          "sleep_mode_entity": "Sleep Mode Entity"
         }
       },
       "remove_zone": {

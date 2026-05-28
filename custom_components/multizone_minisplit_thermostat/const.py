@@ -46,7 +46,6 @@ AUTOMATIC_MODE_COOLDOWN = 300  # 5 minutes in seconds
 # Offset learning and sleep mode configuration keys
 CONF_OUTSIDE_TEMP_ENTITY = "outside_temp_entity"
 CONF_SLEEP_MODE_ENTITY = "sleep_mode_entity"
-CONF_SLEEP_PRESET = "sleep_preset"
 CONF_DEBOUNCE_INTERVAL = "debounce_interval"
 CONF_DEBOUNCE_THRESHOLD = "debounce_threshold"
 

@@ -22,7 +22,6 @@ from .const import (
     CONF_ENTITY_ID,
     CONF_PRIORITY,
     CONF_SLEEP_MODE_ENTITY,
-    CONF_SLEEP_PRESET,
     DEFAULT_COOL_TEMP,
     DEFAULT_DEBOUNCE_INTERVAL,
     DEFAULT_DEBOUNCE_THRESHOLD,
@@ -214,17 +213,7 @@ class MiniSplitThermostatCoordinator:
         return state.state.lower() == "on"
 
     def get_active_preset(self, entity_id: str) -> str:
-        """Get the active preset for a zone, considering sleep mode."""
-        if self.is_sleep_mode_active(entity_id):
-            zone_config = None
-            for zc in self.zone_configs:
-                if zc[CONF_ENTITY_ID] == entity_id:
-                    zone_config = zc
-                    break
-            if zone_config:
-                sleep_preset = zone_config.get(CONF_SLEEP_PRESET)
-                if sleep_preset and sleep_preset in PRESETS:
-                    return sleep_preset
+        """Get the active preset for a zone."""
         return self._zone_presets.get(entity_id, PRESET_COMFORT)
 
     def should_adjust_temperature(self, entity_id: str, new_offset: float) -> bool:
