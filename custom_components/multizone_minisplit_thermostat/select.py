@@ -99,9 +99,9 @@ class ZonePresetSelect(SelectEntity):
         """Return the current preset for this zone."""
         return self.coordinator.entity_presets.get(self._underlying_entity_id)
 
-    def select_option(self, option: str) -> None:
+    async def async_select_option(self, option: str) -> None:
         """Change the selected preset for this zone."""
-        self.coordinator.set_entity_preset(self._underlying_entity_id, option)
+        await self.coordinator.set_entity_preset(self._underlying_entity_id, option)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

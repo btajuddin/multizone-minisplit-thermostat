@@ -120,6 +120,42 @@ class MiniSplitThermostatCoordinator:
         key = "heat_temp" if mode == "heat" else "cool_temp"
         self._preset_configs[preset][key] = value
         self._notify_state_changed()
+        await self.async_push_temperatures()
+
+    async def async_push_temperatures(self) -> None:
+        """Push the current target temperatures to all underlying thermostats."""
+        for zone_config in self.zone_configs:
+            entity_id = zone_config[CONF_ENTITY_ID]
+            target_temp = self.get_target_temp(entity_id)
+            await self.hass.services.async_call(
+                "climate",
+                "set_temperature",
+                {"entity_id": entity_id, "temperature": target_temp},
+            )
+
+    async def async_sync_zones(self) -> None:
+        """Synchronize all underlying thermostats with current mode and temperatures."""
+        if self._hvac_mode is None:
+            _LOGGER.debug("No HVAC mode set yet, skipping zone sync")
+            return
+
+        _LOGGER.info("Synchronizing all zones with mode %s", self._hvac_mode)
+
+        for zone_config in self.zone_configs:
+            entity_id = zone_config[CONF_ENTITY_ID]
+            await self.hass.services.async_call(
+                "climate",
+                "set_hvac_mode",
+                {"entity_id": entity_id, "hvac_mode": self._hvac_mode.value},
+            )
+            target_temp = self.get_target_temp(entity_id)
+            await self.hass.services.async_call(
+                "climate",
+                "set_temperature",
+                {"entity_id": entity_id, "temperature": target_temp},
+            )
+
+        self._last_auto_mode_change = time.time()
 
     async def _persist_mode(self) -> None:
         """Persist the current mode to config entry options."""
@@ -143,7 +179,7 @@ class MiniSplitThermostatCoordinator:
         """Request all registered entities to update their HA state."""
         self._notify_state_changed()
 
-    def set_entity_preset(self, entity_id: str, preset: str) -> None:
+    async def set_entity_preset(self, entity_id: str, preset: str) -> None:
         """Set the preset for a specific zone."""
         if entity_id not in self._zone_presets:
             _LOGGER.warning("Zone %s not managed by this thermostat", entity_id)
@@ -152,6 +188,7 @@ class MiniSplitThermostatCoordinator:
             _LOGGER.warning("Invalid preset: %s", preset)
             return
         self._zone_presets[entity_id] = preset
+        await self.async_push_temperatures()
 
     async def async_set_hvac_mode(self, mode: HVACMode) -> None:
         """Set the HVAC mode for all underlying zones."""

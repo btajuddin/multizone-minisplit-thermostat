@@ -137,8 +137,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _register_coordinator(coordinator)
     coordinator.setup_state_listeners()
 
-    # Determine or restore mode on startup
+    # Determine mode and synchronize all zones on startup
     await coordinator.async_check_and_update_mode()
+    await coordinator.async_sync_zones()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -175,7 +176,7 @@ def _async_register_services(hass: HomeAssistant) -> None:
             )
             return
 
-        coordinator.set_entity_preset(target_zone, preset)
+        await coordinator.set_entity_preset(target_zone, preset)
         await coordinator.async_check_and_update_mode()
         coordinator.async_request_ha_state_update()
 
