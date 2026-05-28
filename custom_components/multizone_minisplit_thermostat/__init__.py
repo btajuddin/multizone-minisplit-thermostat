@@ -16,20 +16,29 @@ from .const import (
     ATTR_PRESET,
     ATTR_ZONE,
     CONF_DEFAULT_PRESET,
+    CONF_DEBOUNCE_INTERVAL,
+    CONF_DEBOUNCE_THRESHOLD,
     CONF_ENTITY_ID,
+    CONF_OUTSIDE_TEMP_ENTITY,
     CONF_PRESET_CONFIGS,
     CONF_PRIORITY,
+    CONF_SLEEP_MODE_ENTITY,
+    CONF_SLEEP_PRESET,
     CONF_ZONES,
+    DEFAULT_DEBOUNCE_INTERVAL,
+    DEFAULT_DEBOUNCE_THRESHOLD,
     DEFAULT_PRIORITY,
     DOMAIN,
     PRESETS,
+    SERVICE_CLEAR_OFFSET_HISTORY,
+    SERVICE_RECALCULATE_OFFSETS,
     SERVICE_SET_ZONE_PRESET,
 )
 from .coordinator import MiniSplitThermostatCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.SELECT, Platform.NUMBER]
+PLATFORMS = [Platform.SELECT, Platform.NUMBER, Platform.SENSOR]
 
 # Per-preset temperature configuration schema (shared across all zones)
 PRESET_CONFIG_SCHEMA = vol.Schema({
@@ -44,6 +53,8 @@ ZONE_CONFIG_SCHEMA = vol.Schema({
     vol.Required(CONF_ENTITY_ID): cv.entity_id,
     vol.Optional(CONF_DEFAULT_PRESET, default="comfort"): vol.In(PRESETS),
     vol.Optional(CONF_PRIORITY, default=DEFAULT_PRIORITY): vol.Coerce(int),
+    vol.Optional(CONF_SLEEP_MODE_ENTITY): cv.entity_id,
+    vol.Optional(CONF_SLEEP_PRESET): vol.In(PRESETS),
 })
 
 # Top-level integration schema
@@ -51,6 +62,9 @@ INTEGRATION_SCHEMA = vol.Schema({
     vol.Required(CONF_NAME): cv.string,
     vol.Required(CONF_ZONES): vol.All(cv.ensure_list, [ZONE_CONFIG_SCHEMA]),
     vol.Optional(CONF_PRESET_CONFIGS, default={}): PRESET_CONFIG_SCHEMA,
+    vol.Optional(CONF_OUTSIDE_TEMP_ENTITY): cv.entity_id,
+    vol.Optional(CONF_DEBOUNCE_INTERVAL, default=DEFAULT_DEBOUNCE_INTERVAL): vol.Coerce(int),
+    vol.Optional(CONF_DEBOUNCE_THRESHOLD, default=DEFAULT_DEBOUNCE_THRESHOLD): vol.Coerce(float),
 })
 
 CONFIG_SCHEMA = vol.Schema(
@@ -128,14 +142,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     zone_configs = merged_data.get(CONF_ZONES, [])
     preset_configs = merged_data.get(CONF_PRESET_CONFIGS, {})
 
+    # Extract new configuration options
+    outside_temp_entity = merged_data.get(CONF_OUTSIDE_TEMP_ENTITY)
+    debounce_interval = merged_data.get(CONF_DEBOUNCE_INTERVAL, DEFAULT_DEBOUNCE_INTERVAL)
+    debounce_threshold = merged_data.get(CONF_DEBOUNCE_THRESHOLD, DEFAULT_DEBOUNCE_THRESHOLD)
+
     coordinator = MiniSplitThermostatCoordinator(
         hass=hass,
         entry=entry,
         zone_configs=zone_configs,
         preset_configs=preset_configs,
+        outside_temp_entity=outside_temp_entity,
+        debounce_interval=debounce_interval,
+        debounce_threshold=debounce_threshold,
     )
     _register_coordinator(coordinator)
     coordinator.setup_state_listeners()
+
+    # Initialize offset learning
+    await coordinator.async_init_offset_learning()
 
     # Determine mode and synchronize all zones on startup
     await coordinator.async_check_and_update_mode()
@@ -180,6 +205,42 @@ def _async_register_services(hass: HomeAssistant) -> None:
         await coordinator.async_check_and_update_mode()
         coordinator.async_request_ha_state_update()
 
+    async def async_recalculate_offsets(call: ServiceCall) -> None:
+        """Recalculate offsets for all zones or a specific zone."""
+        target_zone = call.data.get(ATTR_ZONE)
+
+        if target_zone:
+            coordinator = _find_coordinator_for_zone(target_zone)
+            if coordinator is None:
+                _LOGGER.warning(
+                    "Zone %s is not managed by any %s thermostat",
+                    target_zone,
+                    DOMAIN,
+                )
+                return
+            await coordinator.async_recalculate_offsets()
+        else:
+            for coordinator in _coordinators.values():
+                await coordinator.async_recalculate_offsets()
+
+    async def async_clear_offset_history(call: ServiceCall) -> None:
+        """Clear offset history for all zones or a specific zone."""
+        target_zone = call.data.get(ATTR_ZONE)
+
+        if target_zone:
+            coordinator = _find_coordinator_for_zone(target_zone)
+            if coordinator is None:
+                _LOGGER.warning(
+                    "Zone %s is not managed by any %s thermostat",
+                    target_zone,
+                    DOMAIN,
+                )
+                return
+            await coordinator.async_clear_offset_history(target_zone)
+        else:
+            for coordinator in _coordinators.values():
+                await coordinator.async_clear_offset_history()
+
     hass.services.async_register(
         DOMAIN,
         SERVICE_SET_ZONE_PRESET,
@@ -187,5 +248,23 @@ def _async_register_services(hass: HomeAssistant) -> None:
         schema=vol.Schema({
             vol.Required(ATTR_ZONE): cv.entity_id,
             vol.Required(ATTR_PRESET): vol.In(PRESETS),
+        }),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_RECALCULATE_OFFSETS,
+        async_recalculate_offsets,
+        schema=vol.Schema({
+            vol.Optional(ATTR_ZONE): cv.entity_id,
+        }),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CLEAR_OFFSET_HISTORY,
+        async_clear_offset_history,
+        schema=vol.Schema({
+            vol.Optional(ATTR_ZONE): cv.entity_id,
         }),
     )

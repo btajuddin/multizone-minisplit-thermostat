@@ -42,3 +42,21 @@ DEFAULT_PRIORITY = 0
 TEMPERATURE_TOLERANCE = 1.0  # degrees F before triggering mode change
 
 AUTOMATIC_MODE_COOLDOWN = 300  # 5 minutes in seconds
+
+# Offset learning and sleep mode configuration keys
+CONF_OUTSIDE_TEMP_ENTITY = "outside_temp_entity"
+CONF_SLEEP_MODE_ENTITY = "sleep_mode_entity"
+CONF_SLEEP_PRESET = "sleep_preset"
+CONF_DEBOUNCE_INTERVAL = "debounce_interval"
+CONF_DEBOUNCE_THRESHOLD = "debounce_threshold"
+
+# Offset learning and debounce defaults
+DEFAULT_DEBOUNCE_INTERVAL = 900  # 15 minutes in seconds
+DEFAULT_DEBOUNCE_THRESHOLD = 0.5  # degrees F
+OFFSET_LEARNING_WINDOW = 2592000  # 30 days in seconds
+OFFSET_RECALC_INTERVAL = 300  # recalculate every 5 minutes
+OFFSET_MAX_VALUE = 5.0  # maximum absolute offset in degrees F (clamp)
+
+# Service constants
+SERVICE_RECALCULATE_OFFSETS = "recalculate_offsets"
+SERVICE_CLEAR_OFFSET_HISTORY = "clear_offset_history"

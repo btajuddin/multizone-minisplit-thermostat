@@ -20,13 +20,22 @@
           "failsafe_cool_temp": "Failsafe - Cooling Target"
         }
       },
+      "outside_temp": {
+        "title": "Outside Temperature Sensor",
+        "description": "{info}",
+        "data": {
+          "outside_temp_entity": "Outside Temperature Entity"
+        }
+      },
       "add_zone": {
         "title": "Add Climate Zone",
         "description": "Add a climate zone to this thermostat group.",
         "data": {
           "entity_id": "Climate Zone Entity ID",
           "default_preset": "Default Preset",
-          "priority": "Zone Priority (higher = more important for mode decisions)"
+          "priority": "Zone Priority (higher = more important for mode decisions)",
+          "sleep_mode_entity": "Sleep Mode Entity",
+          "sleep_preset": "Sleep Preset"
         }
       },
       "add_zone_confirm": {
@@ -34,6 +43,14 @@
         "description": "Would you like to add another climate zone to this group?",
         "data": {
           "add_another": "Add another zone"
+        }
+      },
+      "debounce_config": {
+        "title": "Debounce Settings",
+        "description": "{info}",
+        "data": {
+          "debounce_interval": "Debounce Interval",
+          "debounce_threshold": "Debounce Threshold"
         }
       },
       "remove_zone": {
@@ -72,7 +89,9 @@
         "data": {
           "entity_id": "Climate Zone Entity ID",
           "default_preset": "Default Preset",
-          "priority": "Zone Priority (higher = more important for mode decisions)"
+          "priority": "Zone Priority (higher = more important for mode decisions)",
+          "sleep_mode_entity": "Sleep Mode Entity",
+          "sleep_preset": "Sleep Preset"
         }
       },
       "remove_zone": {
@@ -80,6 +99,21 @@
         "description": "Select a zone to remove from this thermostat group.",
         "data": {
           "zone_index": "Zone to remove"
+        }
+      },
+      "outside_temp": {
+        "title": "Outside Temperature Sensor",
+        "description": "Select the outside temperature sensor for offset learning.",
+        "data": {
+          "outside_temp_entity": "Outside Temperature Entity"
+        }
+      },
+      "debounce_config": {
+        "title": "Debounce Settings",
+        "description": "Configure debounce interval and threshold for temperature adjustments.",
+        "data": {
+          "debounce_interval": "Debounce Interval",
+          "debounce_threshold": "Debounce Threshold"
         }
       }
     },
@@ -99,6 +133,26 @@
         "preset": {
           "name": "Preset",
           "description": "The preset to apply (comfort, eco, or failsafe)."
+        }
+      }
+    },
+    "recalculate_offsets": {
+      "name": "Recalculate Offsets",
+      "description": "Force recalculation of learned temperature offsets.",
+      "fields": {
+        "zone": {
+          "name": "Zone",
+          "description": "Optional: specific zone entity to recalculate. Leave empty for all zones."
+        }
+      }
+    },
+    "clear_offset_history": {
+      "name": "Clear Offset History",
+      "description": "Clear learned offset data.",
+      "fields": {
+        "zone": {
+          "name": "Zone",
+          "description": "Optional: specific zone entity to clear. Leave empty for all zones."
         }
       }
     }
@@ -128,6 +182,20 @@
       },
       "zone_priority": {
         "name": "Zone Priority"
+      },
+      "debounce_interval": {
+        "name": "Debounce Interval"
+      },
+      "debounce_threshold": {
+        "name": "Debounce Threshold"
+      }
+    },
+    "sensor": {
+      "learned_offset": {
+        "name": "Learned Offset"
+      },
+      "offset_samples": {
+        "name": "Offset Samples"
       }
     }
   }

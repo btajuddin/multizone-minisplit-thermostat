@@ -15,10 +15,17 @@ from homeassistant.helpers.selector import selector
 
 from .const import (
     CONF_DEFAULT_PRESET,
+    CONF_DEBOUNCE_INTERVAL,
+    CONF_DEBOUNCE_THRESHOLD,
     CONF_ENTITY_ID,
+    CONF_OUTSIDE_TEMP_ENTITY,
     CONF_PRESET_CONFIGS,
     CONF_PRIORITY,
+    CONF_SLEEP_MODE_ENTITY,
+    CONF_SLEEP_PRESET,
     CONF_ZONES,
+    DEFAULT_DEBOUNCE_INTERVAL,
+    DEFAULT_DEBOUNCE_THRESHOLD,
     DEFAULT_PRIORITY,
     DOMAIN,
     PRESETS,
@@ -36,6 +43,12 @@ STEP_ADD_ZONE_SCHEMA = vol.Schema({
     vol.Optional(CONF_PRIORITY, default=DEFAULT_PRIORITY): selector({
         "number": {"min": 0, "max": 100, "step": 1, "mode": "box"}
     }),
+    vol.Optional(CONF_SLEEP_MODE_ENTITY): selector({
+        "entity": {"domain": ["input_boolean", "switch", "binary_sensor"]}
+    }),
+    vol.Optional(CONF_SLEEP_PRESET): selector({
+        "select": {"options": PRESETS}
+    }),
 })
 
 
@@ -52,6 +65,9 @@ class MultizoneMinisplitThermostatFlowHandler(
         self._entry_id: str | None = None
         self._zones: list[dict[str, Any]] = []
         self._preset_configs: dict[str, dict[str, float]] = {}
+        self._outside_temp_entity: str | None = None
+        self._debounce_interval: int = DEFAULT_DEBOUNCE_INTERVAL
+        self._debounce_threshold: float = DEFAULT_DEBOUNCE_THRESHOLD
 
     async def async_step_import(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle YAML import."""
@@ -102,7 +118,7 @@ class MultizoneMinisplitThermostatFlowHandler(
                 if cool is not None:
                     self._preset_configs[preset]["cool_temp"] = cool
 
-            return await self.async_step_add_zone()
+            return await self.async_step_outside_temp()
 
         # Build schema with optional temp fields for each preset
         schema_dict = {}
@@ -117,6 +133,24 @@ class MultizoneMinisplitThermostatFlowHandler(
             description_placeholders={"presets": ", ".join(PRESETS)},
         )
 
+    async def async_step_outside_temp(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Configure outside temperature entity for offset learning."""
+        if user_input is not None:
+            self._outside_temp_entity = user_input.get(CONF_OUTSIDE_TEMP_ENTITY)
+            return await self.async_step_add_zone()
+
+        return self.async_show_form(
+            step_id="outside_temp",
+            data_schema=vol.Schema({
+                vol.Optional(CONF_OUTSIDE_TEMP_ENTITY): selector({
+                    "entity": {"domain": ["sensor", "weather", "input_number"]}
+                }),
+            }),
+            description_placeholders={
+                "info": "Optionally select an outside temperature sensor to enable offset learning. This helps the system learn temperature differences between zone thermostats and mini-splits."
+            },
+        )
+
     async def async_step_add_zone(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle adding a zone to the thermostat group."""
         errors: dict[str, str] = {}
@@ -127,6 +161,10 @@ class MultizoneMinisplitThermostatFlowHandler(
                 CONF_DEFAULT_PRESET: user_input.get(CONF_DEFAULT_PRESET, "comfort"),
                 CONF_PRIORITY: user_input.get(CONF_PRIORITY, DEFAULT_PRIORITY),
             }
+            if user_input.get(CONF_SLEEP_MODE_ENTITY):
+                zone_config[CONF_SLEEP_MODE_ENTITY] = user_input[CONF_SLEEP_MODE_ENTITY]
+            if user_input.get(CONF_SLEEP_PRESET):
+                zone_config[CONF_SLEEP_PRESET] = user_input[CONF_SLEEP_PRESET]
             self._zones.append(zone_config)
 
             return self.async_show_form(
@@ -149,17 +187,45 @@ class MultizoneMinisplitThermostatFlowHandler(
         if user_input and user_input.get("add_another"):
             return await self.async_step_add_zone()
 
-        return await self.async_step_finalize()
+        return await self.async_step_debounce_config()
+
+    async def async_step_debounce_config(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Configure debounce settings (advanced)."""
+        if user_input is not None:
+            self._debounce_interval = user_input.get(CONF_DEBOUNCE_INTERVAL, DEFAULT_DEBOUNCE_INTERVAL)
+            self._debounce_threshold = user_input.get(CONF_DEBOUNCE_THRESHOLD, DEFAULT_DEBOUNCE_THRESHOLD)
+            return await self.async_step_finalize()
+
+        return self.async_show_form(
+            step_id="debounce_config",
+            data_schema=vol.Schema({
+                vol.Optional(CONF_DEBOUNCE_INTERVAL, default=DEFAULT_DEBOUNCE_INTERVAL): selector({
+                    "number": {"min": 60, "max": 3600, "step": 60, "mode": "box", "unit_of_measurement": "s"}
+                }),
+                vol.Optional(CONF_DEBOUNCE_THRESHOLD, default=DEFAULT_DEBOUNCE_THRESHOLD): selector({
+                    "number": {"min": 0.1, "max": 5.0, "step": 0.1, "mode": "box", "unit_of_measurement": "°F"}
+                }),
+            }),
+            description_placeholders={
+                "info": "Debounce settings control how often temperature adjustments are pushed to mini-splits. Higher values reduce frequent changes but may slow response to temperature shifts."
+            },
+        )
 
     async def async_step_finalize(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Finalize the config entry."""
+        data = {
+            CONF_NAME: self._name or "Multi-Zone Thermostat",
+            CONF_ZONES: self._zones,
+            CONF_PRESET_CONFIGS: self._preset_configs,
+        }
+        if self._outside_temp_entity:
+            data[CONF_OUTSIDE_TEMP_ENTITY] = self._outside_temp_entity
+        data[CONF_DEBOUNCE_INTERVAL] = self._debounce_interval
+        data[CONF_DEBOUNCE_THRESHOLD] = self._debounce_threshold
+
         return self.async_create_entry(
             title=self._name or "Multi-Zone Thermostat",
-            data={
-                CONF_NAME: self._name or "Multi-Zone Thermostat",
-                CONF_ZONES: self._zones,
-                CONF_PRESET_CONFIGS: self._preset_configs,
-            },
+            data=data,
         )
 
     @staticmethod
@@ -201,6 +267,10 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
                 return await self.async_step_add_zone()
             elif action == "remove":
                 return await self.async_step_remove_zone()
+            elif action == "outside_temp":
+                return await self.async_step_outside_temp()
+            elif action == "debounce":
+                return await self.async_step_debounce_config()
             return await self.async_step_finalize()
 
         # Build zone summary for description
@@ -219,6 +289,8 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
                         "options": [
                             {"value": "add", "label": "Add a zone"},
                             {"value": "remove", "label": "Remove a zone"},
+                            {"value": "outside_temp", "label": "Outside temperature sensor"},
+                            {"value": "debounce", "label": "Debounce settings"},
                             {"value": "done", "label": "Done"},
                         ],
                     }
@@ -229,6 +301,54 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
                 "zones": zone_summary,
             },
             errors=errors,
+        )
+
+    async def async_step_outside_temp(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Configure outside temperature entity."""
+        merged = {**self.config_entry.data, **self.config_entry.options}
+        current_entity = merged.get(CONF_OUTSIDE_TEMP_ENTITY)
+
+        if user_input is not None:
+            new_entity = user_input.get(CONF_OUTSIDE_TEMP_ENTITY)
+            current_options = dict(self.config_entry.options)
+            current_options[CONF_OUTSIDE_TEMP_ENTITY] = new_entity
+            return self.async_create_entry(data=current_options)
+
+        return self.async_show_form(
+            step_id="outside_temp",
+            data_schema=vol.Schema({
+                vol.Optional(CONF_OUTSIDE_TEMP_ENTITY, default=current_entity): selector({
+                    "entity": {"domain": ["sensor", "weather", "input_number"]}
+                }),
+            }),
+        )
+
+    async def async_step_debounce_config(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Configure debounce settings."""
+        merged = {**self.config_entry.data, **self.config_entry.options}
+        current_interval = merged.get(CONF_DEBOUNCE_INTERVAL, DEFAULT_DEBOUNCE_INTERVAL)
+        current_threshold = merged.get(CONF_DEBOUNCE_THRESHOLD, DEFAULT_DEBOUNCE_THRESHOLD)
+
+        if user_input is not None:
+            current_options = dict(self.config_entry.options)
+            current_options[CONF_DEBOUNCE_INTERVAL] = user_input.get(CONF_DEBOUNCE_INTERVAL, current_interval)
+            current_options[CONF_DEBOUNCE_THRESHOLD] = user_input.get(CONF_DEBOUNCE_THRESHOLD, current_threshold)
+            return self.async_create_entry(data=current_options)
+
+        return self.async_show_form(
+            step_id="debounce_config",
+            data_schema=vol.Schema({
+                vol.Optional(CONF_DEBOUNCE_INTERVAL, default=current_interval): selector({
+                    "number": {"min": 60, "max": 3600, "step": 60, "mode": "box", "unit_of_measurement": "s"}
+                }),
+                vol.Optional(CONF_DEBOUNCE_THRESHOLD, default=current_threshold): selector({
+                    "number": {"min": 0.1, "max": 5.0, "step": 0.1, "mode": "box", "unit_of_measurement": "°F"}
+                }),
+            }),
         )
 
     async def async_step_add_zone(
@@ -247,6 +367,10 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
                     CONF_DEFAULT_PRESET: user_input.get(CONF_DEFAULT_PRESET, "comfort"),
                     CONF_PRIORITY: user_input.get(CONF_PRIORITY, DEFAULT_PRIORITY),
                 }
+                if user_input.get(CONF_SLEEP_MODE_ENTITY):
+                    zone_config[CONF_SLEEP_MODE_ENTITY] = user_input[CONF_SLEEP_MODE_ENTITY]
+                if user_input.get(CONF_SLEEP_PRESET):
+                    zone_config[CONF_SLEEP_PRESET] = user_input[CONF_SLEEP_PRESET]
                 self._zones.append(zone_config)
                 return await self.async_step_manage_zones()
 
