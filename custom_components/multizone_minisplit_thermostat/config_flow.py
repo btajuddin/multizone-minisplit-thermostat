@@ -22,7 +22,7 @@ from .const import (
     CONF_OUTSIDE_TEMP_ENTITY,
     CONF_PRESET_CONFIGS,
     CONF_PRIORITY,
-    CONF_SLEEP_MODE_ENTITY,
+    CONF_QUIET_MODE_ENTITY,
     CONF_ZONES,
     DEFAULT_DEBOUNCE_INTERVAL,
     DEFAULT_DEBOUNCE_THRESHOLD,
@@ -43,7 +43,7 @@ STEP_ADD_ZONE_SCHEMA = vol.Schema({
     vol.Optional(CONF_PRIORITY, default=DEFAULT_PRIORITY): selector({
         "number": {"min": 0, "max": 100, "step": 1, "mode": "box"}
     }),
-    vol.Optional(CONF_SLEEP_MODE_ENTITY): selector({
+    vol.Optional(CONF_QUIET_MODE_ENTITY): selector({
         "entity": {"domain": ["input_boolean", "switch", "binary_sensor"]}
     }),
 })
@@ -240,8 +240,8 @@ class MultizoneMinisplitThermostatFlowHandler(
                     CONF_DEFAULT_PRESET: user_input.get(CONF_DEFAULT_PRESET, "comfort"),
                     CONF_PRIORITY: user_input.get(CONF_PRIORITY, DEFAULT_PRIORITY),
                 }
-                if user_input.get(CONF_SLEEP_MODE_ENTITY):
-                    zone_config[CONF_SLEEP_MODE_ENTITY] = user_input[CONF_SLEEP_MODE_ENTITY]
+                if user_input.get(CONF_QUIET_MODE_ENTITY):
+                    zone_config[CONF_QUIET_MODE_ENTITY] = user_input[CONF_QUIET_MODE_ENTITY]
                 self._zones.append(zone_config)
                 return await self.async_step_configure()
 
@@ -479,8 +479,8 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
                     CONF_DEFAULT_PRESET: user_input.get(CONF_DEFAULT_PRESET, "comfort"),
                     CONF_PRIORITY: user_input.get(CONF_PRIORITY, DEFAULT_PRIORITY),
                 }
-                if user_input.get(CONF_SLEEP_MODE_ENTITY):
-                    zone_config[CONF_SLEEP_MODE_ENTITY] = user_input[CONF_SLEEP_MODE_ENTITY]
+                if user_input.get(CONF_QUIET_MODE_ENTITY):
+                    zone_config[CONF_QUIET_MODE_ENTITY] = user_input[CONF_QUIET_MODE_ENTITY]
                 self._zones.append(zone_config)
                 return await self.async_step_manage_zones()
 

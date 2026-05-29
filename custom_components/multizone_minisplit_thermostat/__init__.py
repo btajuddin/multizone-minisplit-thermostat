@@ -23,7 +23,7 @@ from .const import (
     CONF_OUTSIDE_TEMP_ENTITY,
     CONF_PRESET_CONFIGS,
     CONF_PRIORITY,
-    CONF_SLEEP_MODE_ENTITY,
+    CONF_QUIET_MODE_ENTITY,
     CONF_ZONES,
     DEFAULT_DEBOUNCE_INTERVAL,
     DEFAULT_DEBOUNCE_THRESHOLD,
@@ -53,7 +53,7 @@ ZONE_CONFIG_SCHEMA = vol.Schema({
     vol.Required(CONF_ENTITY_ID): cv.entity_id,
     vol.Optional(CONF_DEFAULT_PRESET, default="comfort"): vol.In(PRESETS),
     vol.Optional(CONF_PRIORITY, default=DEFAULT_PRIORITY): vol.Coerce(int),
-    vol.Optional(CONF_SLEEP_MODE_ENTITY): cv.entity_id,
+    vol.Optional(CONF_QUIET_MODE_ENTITY): cv.entity_id,
 })
 
 # Top-level integration schema

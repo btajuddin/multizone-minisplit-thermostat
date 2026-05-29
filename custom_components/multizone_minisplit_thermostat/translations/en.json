@@ -42,7 +42,7 @@
           "entity_id": "Climate Zone Entity ID",
           "default_preset": "Default Preset",
           "priority": "Zone Priority (higher = more important for mode decisions)",
-          "sleep_mode_entity": "Sleep Mode Entity"
+          "quiet_mode_entity": "Quiet Mode Entity"
         }
       },
       "debounce_config": {
@@ -94,7 +94,7 @@
           "entity_id": "Climate Zone Entity ID",
           "default_preset": "Default Preset",
           "priority": "Zone Priority (higher = more important for mode decisions)",
-          "sleep_mode_entity": "Sleep Mode Entity"
+          "quiet_mode_entity": "Quiet Mode Entity"
         }
       },
       "remove_zone": {

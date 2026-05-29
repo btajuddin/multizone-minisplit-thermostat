@@ -1,6 +1,6 @@
 # Multi-Zone Mini-Split Thermostat
 
-A Home Assistant custom integration that creates a virtual thermostat to manage multiple mini-split zones with per-zone preset control, automatic mode switching, offset learning, and sleep mode.
+A Home Assistant custom integration that creates a virtual thermostat to manage multiple mini-split zones with per-zone preset control, automatic mode switching, offset learning, and quiet mode.
 
 ## Features
 
@@ -10,7 +10,7 @@ A Home Assistant custom integration that creates a virtual thermostat to manage 
 - **Global preset temperatures** - define heating and cooling targets for each preset, shared across all zones
 - **Zone priority** - when zones conflict, the highest priority zone determines the mode
 - **Offset learning** - ML-based regression that learns the temperature offset between zone thermostats and mini-splits using outside temperature as a predictor; toggleable via config or runtime switch entity
-- **Per-zone sleep mode** - prevents continuous beeping adjustments in zones (e.g., bedrooms) during sleep by forcing a preset, while still allowing mode switching
+- **Per-zone quiet mode** - prevents continuous beeping adjustments in zones (e.g., bedrooms) during quiet hours by forcing a preset, while still allowing mode switching
 - **Debounce system** - prevents rapid or tiny temperature adjustments to mini-splits
 - **HACS compatible** - easy installation via HACS
 
@@ -67,21 +67,21 @@ To prevent rapid or unnecessary temperature adjustments:
 
 These settings can be configured during setup or adjusted anytime via the number entity controls.
 
-## Sleep Mode (Per-Zone)
+## Quiet Mode (Per-Zone)
 
-Sleep mode prevents continuous beeping from mini-splits receiving new setpoints during sleep hours, while still allowing HVAC mode switching for dramatic outside temperature changes.
+Quiet mode prevents continuous beeping from mini-splits receiving new setpoints during quiet hours, while still allowing HVAC mode switching for dramatic outside temperature changes.
 
 ### How It Works
 
-1. Configure a **Sleep Mode Entity** per zone (e.g., `input_boolean.bedroom_sleep`)
-2. Configure a **Sleep Preset** per zone (e.g., "eco")
-3. When the sleep mode entity is "on", the zone uses the sleep preset instead of its normal preset
-4. Temperature adjustments are suppressed during sleep mode to avoid beeping
+1. Configure a **Quiet Mode Entity** per zone (e.g., `input_boolean.bedroom_quiet`)
+2. Configure a **Quiet Preset** per zone (e.g., "eco")
+3. When the quiet mode entity is "on", the zone uses the quiet preset instead of its normal preset
+4. Temperature adjustments are suppressed during quiet mode to avoid beeping
 5. **Mode switching still works** - the system can still switch between HEAT and COOL as needed
 
 ### Setup
 
-- Create an `input_boolean` or use a `switch`/`binary_sensor` in Home Assistant for sleep scheduling
+- Create an `input_boolean` or use a `switch`/`binary_sensor` in Home Assistant for quiet scheduling
 - Configure it via the zone setup screen or reconfiguration options
 - Optionally automate it with Home Assistant automations based on time of day
 
@@ -115,7 +115,7 @@ Each zone has a priority value (integer, default: 0). When zones have conflictin
    - Name your thermostat
    - Configure preset temperatures (heat/cool targets for comfort, eco, failsafe)
    - Optionally select an outside temperature sensor for offset learning
-   - Add zones one by one, selecting a default preset, priority, and optional sleep mode configuration
+    - Add zones one by one, selecting a default preset, priority, and optional quiet mode configuration
    - Configure debounce settings (advanced)
 
 #### Reconfiguration
@@ -164,7 +164,7 @@ multizone_minisplit_thermostat:
       - entity_id: climate.bedroom
         default_preset: comfort
         priority: 0
-        sleep_mode_entity: input_boolean.bedroom_sleep
+        quiet_mode_entity: input_boolean.bedroom_quiet
 ```
 
 ## Configuration Options
@@ -183,7 +183,7 @@ multizone_minisplit_thermostat:
 | `entity_id` | Yes | The climate entity ID (e.g., `climate.living_room`) |
 | `default_preset` | No | Default preset for this zone when the integration starts (default: `comfort`) |
 | `priority` | No | Zone priority for mode conflict resolution (default: 0, higher = more important) |
-| `sleep_mode_entity` | No | Entity that controls sleep mode for this zone (e.g., `input_boolean.bedroom_sleep`) |
+| `quiet_mode_entity` | No | Entity that controls quiet mode for this zone (e.g., `input_boolean.bedroom_quiet`) |
 
 ## Entities
 
@@ -267,7 +267,7 @@ Clear learned offset data.
 | Preset | Description |
 |--------|-------------|
 | `comfort` | Normal comfort temperatures for occupied spaces |
-| `eco` | Energy-saving temperatures for unoccupied or sleeping periods |
+| `eco` | Energy-saving temperatures for unoccupied or quiet periods |
 | `failsafe` | Extreme temperatures to prevent pipe freezing or overheating during equipment failures |
 
 ## Architecture Diagram
@@ -298,7 +298,7 @@ Clear learned offset data.
 │                  │  │                  │  │                  │
 │  Preset:         │  │  Preset:         │  │  Preset:         │
 │  failsafe        │  │  comfort         │  │  comfort         │
-│                  │  │                  │  │  Sleep: eco      │
+│                  │  │                  │  │  Quiet: eco      │
 │  Priority: 100   │  │  Priority: 10    │  │  Priority: 0     │
 │                  │  │                  │  │                  │
 │  Offset: 0.0°F   │  │  Offset: 1.2°F   │  │  Offset: -0.8°F  │

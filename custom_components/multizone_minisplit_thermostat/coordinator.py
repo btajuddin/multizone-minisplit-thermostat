@@ -22,7 +22,7 @@ from .const import (
     CONF_ENABLE_OFFSET_LEARNING,
     CONF_ENTITY_ID,
     CONF_PRIORITY,
-    CONF_SLEEP_MODE_ENTITY,
+    CONF_QUIET_MODE_ENTITY,
     DEFAULT_COOL_TEMP,
     DEFAULT_DEBOUNCE_INTERVAL,
     DEFAULT_DEBOUNCE_THRESHOLD,
@@ -59,7 +59,7 @@ class MiniSplitThermostatCoordinator:
     Features:
     - Offset learning: learns temperature offset between zone thermostats
       and mini-splits using outside temperature as a predictor
-    - Sleep mode: prevents temperature adjustments during sleep hours
+    - Quiet mode: prevents temperature adjustments during quiet hours
     - Debounce: prevents rapid/tiny temperature changes
     """
 
@@ -218,8 +218,8 @@ class MiniSplitThermostatCoordinator:
         # Perform initial recalculation
         await self.async_recalculate_offsets()
 
-    def is_sleep_mode_active(self, entity_id: str) -> bool:
-        """Check if sleep mode is active for a zone."""
+    def is_quiet_mode_active(self, entity_id: str) -> bool:
+        """Check if quiet mode is active for a zone."""
         zone_config = None
         for zc in self.zone_configs:
             if zc[CONF_ENTITY_ID] == entity_id:
@@ -229,11 +229,11 @@ class MiniSplitThermostatCoordinator:
         if zone_config is None:
             return False
 
-        sleep_entity = zone_config.get(CONF_SLEEP_MODE_ENTITY)
-        if sleep_entity is None:
+        quiet_entity = zone_config.get(CONF_QUIET_MODE_ENTITY)
+        if quiet_entity is None:
             return False
 
-        state = self.hass.states.get(sleep_entity)
+        state = self.hass.states.get(quiet_entity)
         if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             return False
 
@@ -378,7 +378,7 @@ class MiniSplitThermostatCoordinator:
     async def async_push_temperatures(self) -> None:
         """Push the current target temperatures to all underlying thermostats.
 
-        Respects sleep mode and debounce settings.
+        Respects quiet mode and debounce settings.
         """
         outside_temp = self._get_outside_temp()
         now = time.time()
@@ -387,9 +387,9 @@ class MiniSplitThermostatCoordinator:
             entity_id = zone_config[CONF_ENTITY_ID]
             base_target = self.get_target_temp(entity_id)
 
-            # Check sleep mode: if active, only push if temperature would change
+            # Check quiet mode: if active, only push if temperature would change
             # to the same value the mini-split already has (avoid beeping)
-            if self.is_sleep_mode_active(entity_id):
+            if self.is_quiet_mode_active(entity_id):
                 zone_state = self.get_zone_state(entity_id)
                 if zone_state is not None:
                     current_ms_temp = zone_state.get("temperature")
@@ -419,9 +419,9 @@ class MiniSplitThermostatCoordinator:
         for zone_config in self.zone_configs:
             entity_id = zone_config[CONF_ENTITY_ID]
 
-            # Skip temperature sync if sleep mode is active
-            if self.is_sleep_mode_active(entity_id):
-                _LOGGER.debug("Skipping zone sync for %s (sleep mode active)", entity_id)
+            # Skip temperature sync if quiet mode is active
+            if self.is_quiet_mode_active(entity_id):
+                _LOGGER.debug("Skipping zone sync for %s (quiet mode active)", entity_id)
                 await self.hass.services.async_call(
                     "climate",
                     "set_hvac_mode",
@@ -552,7 +552,7 @@ class MiniSplitThermostatCoordinator:
         Returns the mode that should be set, or None if no change is needed.
         If zones conflict, the highest priority zone wins.
 
-        NOTE: This runs even during sleep mode - mode switching is NOT blocked.
+        NOTE: This runs even during quiet mode - mode switching is NOT blocked.
         """
         if not self._auto_mode:
             return None
@@ -623,8 +623,8 @@ class MiniSplitThermostatCoordinator:
                 "set_hvac_mode",
                 {"entity_id": entity_id, "hvac_mode": determined_mode},
             )
-            # Only push temperature if not in sleep mode
-            if not self.is_sleep_mode_active(entity_id):
+            # Only push temperature if not in quiet mode
+            if not self.is_quiet_mode_active(entity_id):
                 target_temp = self.get_target_temp(entity_id)
                 await self.hass.services.async_call(
                     "climate",
@@ -644,11 +644,11 @@ class MiniSplitThermostatCoordinator:
         if self._outside_temp_entity:
             entity_ids.append(self._outside_temp_entity)
 
-        # Track sleep mode entities if configured
+        # Track quiet mode entities if configured
         for zone_config in self.zone_configs:
-            sleep_entity = zone_config.get(CONF_SLEEP_MODE_ENTITY)
-            if sleep_entity:
-                entity_ids.append(sleep_entity)
+            quiet_entity = zone_config.get(CONF_QUIET_MODE_ENTITY)
+            if quiet_entity:
+                entity_ids.append(quiet_entity)
 
         @callback
         def _async_state_changed(event: Any) -> None:
