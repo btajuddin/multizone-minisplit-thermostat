@@ -8,6 +8,13 @@
           "name": "Thermostat Name"
         }
       },
+      "configure": {
+        "title": "Configure Thermostat",
+        "description": "{status}\n\nChoose an action to continue configuration.",
+        "data": {
+          "action": "Action"
+        }
+      },
       "preset_config": {
         "title": "Configure Preset Temperatures",
         "description": "Set heating and cooling target temperatures for each preset. These temperatures are shared across all zones in the group.",
@@ -38,13 +45,6 @@
           "sleep_mode_entity": "Sleep Mode Entity"
         }
       },
-      "add_zone_confirm": {
-        "title": "Add Another Zone?",
-        "description": "Would you like to add another climate zone to this group?",
-        "data": {
-          "add_another": "Add another zone"
-        }
-      },
       "debounce_config": {
         "title": "Debounce Settings",
         "description": "{info}",
@@ -62,12 +62,16 @@
       },
       "manage_zones": {
         "title": "Manage Zones",
-        "description": "Manage the zones in this thermostat group. Current zones: {zone_count}"
+        "description": "{status}\n\nChoose an action:",
+        "data": {
+          "action": "Action"
+        }
       }
     },
     "error": {
       "invalid_zone": "Invalid climate entity ID",
-      "already_added": "This entity is already added to the zones list"
+      "already_added": "This entity is already added to the zones list",
+      "no_zones": "At least one zone must be added before finishing setup."
     },
     "abort": {
       "already_configured": "This thermostat is already configured",
