@@ -73,7 +73,7 @@ Quiet mode prevents continuous beeping from mini-splits receiving new setpoints 
 
 ### How It Works
 
-1. Configure a **Quiet Mode Entity** per zone (e.g., `input_boolean.bedroom_quiet`)
+1. Configure a **Quiet Mode Entity** per zone (e.g., `input_boolean.bedroom_quiet` or `schedule.bedroom_quiet`)
 2. Configure a **Quiet Preset** per zone (e.g., "eco")
 3. When the quiet mode entity is "on", the zone uses the quiet preset instead of its normal preset
 4. Temperature adjustments are suppressed during quiet mode to avoid beeping
@@ -81,9 +81,10 @@ Quiet mode prevents continuous beeping from mini-splits receiving new setpoints 
 
 ### Setup
 
-- Create an `input_boolean` or use a `switch`/`binary_sensor` in Home Assistant for quiet scheduling
+- Create an `input_boolean`, `switch`, `binary_sensor`, or Home Assistant `schedule` helper for quiet mode
 - Configure it via the zone setup screen or reconfiguration options
-- Optionally automate it with Home Assistant automations based on time of day
+- If using a `schedule` helper, set the quiet hours directly in Home Assistant (no automations needed)
+- Alternatively, use Home Assistant automations based on time of day for non-schedule entities
 
 ## Zone Priority
 
@@ -183,7 +184,7 @@ multizone_minisplit_thermostat:
 | `entity_id` | Yes | The climate entity ID (e.g., `climate.living_room`) |
 | `default_preset` | No | Default preset for this zone when the integration starts (default: `comfort`) |
 | `priority` | No | Zone priority for mode conflict resolution (default: 0, higher = more important) |
-| `quiet_mode_entity` | No | Entity that controls quiet mode for this zone (e.g., `input_boolean.bedroom_quiet`) |
+| `quiet_mode_entity` | No | Entity that controls quiet mode for this zone (e.g., `input_boolean.bedroom_quiet`, `switch`, `binary_sensor`, or `schedule`) |
 
 ## Entities
 

@@ -44,7 +44,7 @@ STEP_ADD_ZONE_SCHEMA = vol.Schema({
         "number": {"min": 0, "max": 100, "step": 1, "mode": "box"}
     }),
     vol.Optional(CONF_QUIET_MODE_ENTITY): selector({
-        "entity": {"domain": ["input_boolean", "switch", "binary_sensor"]}
+        "entity": {"domain": ["input_boolean", "switch", "binary_sensor", "schedule"]}
     }),
 })
 
