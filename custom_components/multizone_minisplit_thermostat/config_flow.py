@@ -335,6 +335,7 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
     def __init__(self) -> None:
         """Initialize options flow."""
         self._zones: list[dict[str, Any]] = []
+        self._quiet_mode_zone_index: int | None = None
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -361,6 +362,8 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
                 return await self.async_step_outside_temp()
             elif action == "offset_learning":
                 return await self.async_step_offset_learning()
+            elif action == "quiet_mode":
+                return await self.async_step_quiet_mode()
             elif action == "debounce":
                 return await self.async_step_debounce_config()
             return await self.async_step_finalize()
@@ -382,6 +385,7 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
                             {"value": "remove", "label": "Remove a zone"},
                             {"value": "outside_temp", "label": "Outside temperature sensor"},
                             {"value": "offset_learning", "label": "Offset learning"},
+                            {"value": "quiet_mode", "label": "Quiet mode entity"},
                             {"value": "debounce", "label": "Debounce settings"},
                             {"value": "done", "label": "Done"},
                         ],
@@ -517,6 +521,56 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
             step_id="remove_zone",
             data_schema=vol.Schema({
                 vol.Required("zone_index"): vol.In(zone_options),
+            }),
+        )
+
+    async def async_step_quiet_mode(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Select a zone to configure its quiet mode entity."""
+        if user_input is not None:
+            self._quiet_mode_zone_index = int(user_input["zone_index"])
+            return await self.async_step_quiet_mode_edit()
+
+        zone_options = {}
+        for i, zone in enumerate(self._zones):
+            entity_id = zone[CONF_ENTITY_ID]
+            friendly = entity_id.split(".")[-1].replace("_", " ").title()
+            quiet_entity = zone.get(CONF_QUIET_MODE_ENTITY)
+            if quiet_entity:
+                friendly += f" (quiet: {quiet_entity})"
+            else:
+                friendly += " (quiet: none)"
+            zone_options[str(i)] = friendly
+
+        return self.async_show_form(
+            step_id="quiet_mode",
+            data_schema=vol.Schema({
+                vol.Required("zone_index"): vol.In(zone_options),
+            }),
+        )
+
+    async def async_step_quiet_mode_edit(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Edit the quiet mode entity for a selected zone."""
+        zone = self._zones[self._quiet_mode_zone_index]
+        current_quiet_entity = zone.get(CONF_QUIET_MODE_ENTITY)
+
+        if user_input is not None:
+            new_entity = user_input.get(CONF_QUIET_MODE_ENTITY)
+            if new_entity:
+                zone[CONF_QUIET_MODE_ENTITY] = new_entity
+            elif CONF_QUIET_MODE_ENTITY in zone:
+                del zone[CONF_QUIET_MODE_ENTITY]
+            return await self.async_step_manage_zones()
+
+        return self.async_show_form(
+            step_id="quiet_mode_edit",
+            data_schema=vol.Schema({
+                vol.Optional(CONF_QUIET_MODE_ENTITY, default=current_quiet_entity): selector({
+                    "entity": {"domain": ["input_boolean", "switch", "binary_sensor", "schedule"]}
+                }),
             }),
         )
 

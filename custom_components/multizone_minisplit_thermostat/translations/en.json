@@ -126,6 +126,20 @@
           "outside_temp_entity": "Outside Temperature Entity",
           "enable_offset_learning": "Enable Offset Learning"
         }
+      },
+      "quiet_mode": {
+        "title": "Quiet Mode Entity",
+        "description": "Select a zone to configure its quiet mode entity. When active, temperature adjustments to the mini-split are suppressed.",
+        "data": {
+          "zone_index": "Zone"
+        }
+      },
+      "quiet_mode_edit": {
+        "title": "Quiet Mode Entity",
+        "description": "Configure the quiet mode entity for the selected zone. When this entity is 'on', temperature adjustments are suppressed to avoid beeping.",
+        "data": {
+          "quiet_mode_entity": "Quiet Mode Entity"
+        }
       }
     },
     "error": {
