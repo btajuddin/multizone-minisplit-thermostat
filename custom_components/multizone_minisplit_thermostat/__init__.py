@@ -38,7 +38,7 @@ from .coordinator import MiniSplitThermostatCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.SELECT, Platform.NUMBER, Platform.SENSOR, Platform.SWITCH]
+PLATFORMS = [Platform.SELECT, Platform.NUMBER, Platform.SENSOR, Platform.SWITCH, Platform.BINARY_SENSOR]
 
 # Per-preset temperature configuration schema (shared across all zones)
 PRESET_CONFIG_SCHEMA = vol.Schema({
