@@ -35,18 +35,23 @@ STEP_USER_DATA_SCHEMA = vol.Schema({
     vol.Required(CONF_NAME): str,
 })
 
-STEP_ADD_ZONE_SCHEMA = vol.Schema({
-    vol.Required(CONF_ENTITY_ID): selector({"entity": {"domain": "climate"}}),
-    vol.Optional(CONF_DEFAULT_PRESET, default="comfort"): selector({
-        "select": {"options": PRESETS}
-    }),
-    vol.Optional(CONF_PRIORITY, default=DEFAULT_PRIORITY): selector({
-        "number": {"min": 0, "max": 100, "step": 1, "mode": "box"}
-    }),
-    vol.Optional(CONF_QUIET_MODE_ENTITY): selector({
-        "entity": {"domain": ["input_boolean", "switch", "binary_sensor", "schedule"]}
-    }),
-})
+def _build_add_zone_schema(exclude_entities: list[str] | None = None) -> vol.Schema:
+    """Build the schema for adding a zone, excluding already-selected entities."""
+    return vol.Schema({
+        vol.Required(CONF_ENTITY_ID): selector({"entity": {
+            "domain": "climate",
+            "exclude_entities": exclude_entities or [],
+        }}),
+        vol.Optional(CONF_DEFAULT_PRESET, default="comfort"): selector({
+            "select": {"options": PRESETS}
+        }),
+        vol.Optional(CONF_PRIORITY, default=DEFAULT_PRIORITY): selector({
+            "number": {"min": 0, "max": 100, "step": 1, "mode": "box"}
+        }),
+        vol.Optional(CONF_QUIET_MODE_ENTITY): selector({
+            "entity": {"domain": ["input_boolean", "switch", "binary_sensor", "schedule"]}
+        }),
+    })
 
 
 class MultizoneMinisplitThermostatFlowHandler(
@@ -245,9 +250,10 @@ class MultizoneMinisplitThermostatFlowHandler(
                 self._zones.append(zone_config)
                 return await self.async_step_configure()
 
+        exclude_entities = [z[CONF_ENTITY_ID] for z in self._zones]
         return self.async_show_form(
             step_id="add_zone",
-            data_schema=STEP_ADD_ZONE_SCHEMA,
+            data_schema=_build_add_zone_schema(exclude_entities),
             errors=errors,
         )
 
@@ -484,9 +490,10 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
                 self._zones.append(zone_config)
                 return await self.async_step_manage_zones()
 
+        exclude_entities = [z[CONF_ENTITY_ID] for z in self._zones]
         return self.async_show_form(
             step_id="add_zone",
-            data_schema=STEP_ADD_ZONE_SCHEMA,
+            data_schema=_build_add_zone_schema(exclude_entities),
             errors=errors,
         )
 
