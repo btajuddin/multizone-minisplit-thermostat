@@ -156,6 +156,9 @@ class MiniSplitThermostatCoordinator:
     async def async_set_offset_learning_enabled(self, enabled: bool) -> None:
         """Enable or disable offset learning."""
         self._enable_offset_learning = enabled
+
+        await self._persist_option(CONF_ENABLE_OFFSET_LEARNING, enabled)
+
         if enabled and self._outside_temp_entity and not self._offset_learners:
             await self.async_init_offset_learning()
         elif not enabled:
@@ -443,16 +446,19 @@ class MiniSplitThermostatCoordinator:
 
         self._last_auto_mode_change = time.time()
 
+    async def _persist_option(self, key: str, value: Any) -> None:
+        """Persist a single option to the config entry options if changed."""
+        entry = self.hass.config_entries.async_get_entry(self.entry_id)
+        if entry:
+            current_options = dict(entry.options)
+            if current_options.get(key) != value:
+                new_options = {**current_options, key: value}
+                self.hass.config_entries.async_update_entry(entry, options=new_options)
+
     async def _persist_mode(self) -> None:
         """Persist the current mode to config entry options."""
         mode_value = self._hvac_mode.value if self._hvac_mode else None
-        current_options = dict(self.hass.config_entries.async_get_entry(self.entry_id).options)
-        if current_options.get("mode") != mode_value:
-            new_options = {**current_options, "mode": mode_value}
-            self.hass.config_entries.async_update_entry(
-                self.hass.config_entries.async_get_entry(self.entry_id),
-                options=new_options,
-            )
+        await self._persist_option("mode", mode_value)
 
     def _notify_state_changed(self) -> None:
         """Notify all registered entities that state has changed."""
