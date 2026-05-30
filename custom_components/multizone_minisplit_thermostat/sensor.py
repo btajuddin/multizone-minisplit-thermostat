@@ -33,22 +33,16 @@ async def async_setup_entry(
     if coordinator is None:
         return
 
-    # Only create sensors if offset learning is initialized
-    if not coordinator.offset_learners:
-        _LOGGER.debug("No offset learners initialized, skipping sensor platform")
-        return
-
     entities = []
 
     for zone_config in coordinator.zone_configs:
         entity_id = zone_config[CONF_ENTITY_ID]
-        if entity_id in coordinator.offset_learners:
-            entities.append(OffsetSensor(coordinator, entity_id))
-            entities.append(OffsetSampleCountSensor(coordinator, entity_id))
-            entities.append(OffsetLearnerSlopeSensor(coordinator, entity_id))
-            entities.append(OffsetLearnerInterceptSensor(coordinator, entity_id))
-            entities.append(OffsetLearnerModelStatusSensor(coordinator, entity_id))
-            entities.append(OffsetLearnerLastCalculationSensor(coordinator, entity_id))
+        entities.append(OffsetSensor(coordinator, entity_id))
+        entities.append(OffsetSampleCountSensor(coordinator, entity_id))
+        entities.append(OffsetLearnerSlopeSensor(coordinator, entity_id))
+        entities.append(OffsetLearnerInterceptSensor(coordinator, entity_id))
+        entities.append(OffsetLearnerModelStatusSensor(coordinator, entity_id))
+        entities.append(OffsetLearnerLastCalculationSensor(coordinator, entity_id))
 
     async_add_entities(entities)
 
@@ -58,6 +52,7 @@ class OffsetSensor(SensorEntity):
 
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
     _attr_native_unit_of_measurement = UnitOfTemperature.FAHRENHEIT
 
     def __init__(
@@ -119,6 +114,7 @@ class OffsetSampleCountSensor(SensorEntity):
 
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
     _attr_native_unit_of_measurement = "samples"
 
     def __init__(
@@ -160,6 +156,7 @@ class OffsetLearnerSlopeSensor(SensorEntity):
 
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
     _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(
@@ -202,6 +199,7 @@ class OffsetLearnerInterceptSensor(SensorEntity):
 
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
     _attr_native_unit_of_measurement = UnitOfTemperature.FAHRENHEIT
     _attr_state_class = SensorStateClass.MEASUREMENT
 
@@ -245,6 +243,7 @@ class OffsetLearnerModelStatusSensor(SensorEntity):
 
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
 
     def __init__(
         self,
@@ -288,6 +287,7 @@ class OffsetLearnerLastCalculationSensor(SensorEntity):
 
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
     _attr_device_class = SensorDeviceClass.TIMESTAMP
 
     def __init__(
