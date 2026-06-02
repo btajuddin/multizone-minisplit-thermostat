@@ -20,6 +20,7 @@ from .const import (
     CONF_DEBOUNCE_THRESHOLD,
     CONF_ENABLE_OFFSET_LEARNING,
     CONF_ENTITY_ID,
+    CONF_MINISPLIT_RUNNING_THRESHOLD,
     CONF_OUTSIDE_TEMP_ENTITY,
     CONF_PRESET_CONFIGS,
     CONF_PRIORITY,
@@ -27,6 +28,7 @@ from .const import (
     CONF_ZONES,
     DEFAULT_DEBOUNCE_INTERVAL,
     DEFAULT_DEBOUNCE_THRESHOLD,
+    DEFAULT_MINISPLIT_RUNNING_THRESHOLD,
     DEFAULT_PRIORITY,
     DOMAIN,
     PRESETS,
@@ -65,6 +67,7 @@ INTEGRATION_SCHEMA = vol.Schema({
     vol.Optional(CONF_DEBOUNCE_INTERVAL, default=DEFAULT_DEBOUNCE_INTERVAL): vol.Coerce(int),
     vol.Optional(CONF_DEBOUNCE_THRESHOLD, default=DEFAULT_DEBOUNCE_THRESHOLD): vol.Coerce(float),
     vol.Optional(CONF_ENABLE_OFFSET_LEARNING, default=True): cv.boolean,
+    vol.Optional(CONF_MINISPLIT_RUNNING_THRESHOLD, default=DEFAULT_MINISPLIT_RUNNING_THRESHOLD): vol.Coerce(float),
 })
 
 CONFIG_SCHEMA = vol.Schema(
@@ -147,6 +150,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     debounce_interval = merged_data.get(CONF_DEBOUNCE_INTERVAL, DEFAULT_DEBOUNCE_INTERVAL)
     debounce_threshold = merged_data.get(CONF_DEBOUNCE_THRESHOLD, DEFAULT_DEBOUNCE_THRESHOLD)
     enable_offset_learning = merged_data.get(CONF_ENABLE_OFFSET_LEARNING, True)
+    minisplit_running_threshold = merged_data.get(CONF_MINISPLIT_RUNNING_THRESHOLD, DEFAULT_MINISPLIT_RUNNING_THRESHOLD)
 
     coordinator = MiniSplitThermostatCoordinator(
         hass=hass,
@@ -157,6 +161,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         debounce_interval=debounce_interval,
         debounce_threshold=debounce_threshold,
         enable_offset_learning=enable_offset_learning,
+        minisplit_running_threshold=minisplit_running_threshold,
     )
     _register_coordinator(coordinator)
     coordinator.setup_state_listeners()

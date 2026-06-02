@@ -57,6 +57,13 @@ OFFSET_LEARNING_WINDOW = 2592000  # 30 days in seconds
 OFFSET_RECALC_INTERVAL = 300  # recalculate every 5 minutes
 OFFSET_MAX_VALUE = 5.0  # maximum absolute offset in degrees F (clamp)
 
+# Running detection configuration key
+CONF_MINISPLIT_RUNNING_THRESHOLD = "minisplit_running_threshold"
+
+# Running detection defaults
+MINISPLIT_RUNNING_WINDOW = 600  # seconds (10 minutes) lookback window for temp change rate
+DEFAULT_MINISPLIT_RUNNING_THRESHOLD = 0.05  # degrees F per minute minimum change to detect running
+
 # Service constants
 SERVICE_RECALCULATE_OFFSETS = "recalculate_offsets"
 SERVICE_CLEAR_OFFSET_HISTORY = "clear_offset_history"
