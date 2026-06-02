@@ -125,6 +125,12 @@ class MiniSplitThermostatCoordinator:
             self._last_temp_adjust_time[entity_id] = 0.0
             self._temperature_history[entity_id] = []
 
+    async def async_set_minisplit_running_threshold(self, value: float) -> None:
+        """Update the minisplit running detection threshold."""
+        self._minisplit_running_threshold = value
+        await self._persist_option(CONF_MINISPLIT_RUNNING_THRESHOLD, value)
+        self._notify_state_changed()
+
     @property
     def entity_presets(self) -> dict[str, str]:
         """Return the current preset for each zone."""
