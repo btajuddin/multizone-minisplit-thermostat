@@ -24,6 +24,7 @@ from .const import (
     CONF_PRESET_CONFIGS,
     CONF_PRIORITY,
     CONF_QUIET_MODE_ENTITY,
+    CONF_TEMP_SENSOR_ENTITY_ID,
     CONF_ZONES,
     DEFAULT_DEBOUNCE_INTERVAL,
     DEFAULT_DEBOUNCE_THRESHOLD,
@@ -52,6 +53,9 @@ def _build_add_zone_schema(exclude_entities: list[str] | None = None) -> vol.Sch
         }),
         vol.Optional(CONF_QUIET_MODE_ENTITY): selector({
             "entity": {"domain": ["input_boolean", "switch", "binary_sensor", "schedule"]}
+        }),
+        vol.Optional(CONF_TEMP_SENSOR_ENTITY_ID): selector({
+            "entity": {"domain": ["sensor", "number"]}
         }),
     })
 
@@ -254,6 +258,8 @@ class MultizoneMinisplitThermostatFlowHandler(
                 }
                 if user_input.get(CONF_QUIET_MODE_ENTITY):
                     zone_config[CONF_QUIET_MODE_ENTITY] = user_input[CONF_QUIET_MODE_ENTITY]
+                if user_input.get(CONF_TEMP_SENSOR_ENTITY_ID):
+                    zone_config[CONF_TEMP_SENSOR_ENTITY_ID] = user_input[CONF_TEMP_SENSOR_ENTITY_ID]
                 self._zones.append(zone_config)
                 return await self.async_step_configure()
 
@@ -545,6 +551,8 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
                 }
                 if user_input.get(CONF_QUIET_MODE_ENTITY):
                     zone_config[CONF_QUIET_MODE_ENTITY] = user_input[CONF_QUIET_MODE_ENTITY]
+                if user_input.get(CONF_TEMP_SENSOR_ENTITY_ID):
+                    zone_config[CONF_TEMP_SENSOR_ENTITY_ID] = user_input[CONF_TEMP_SENSOR_ENTITY_ID]
                 self._zones.append(zone_config)
                 return await self.async_step_manage_zones()
 

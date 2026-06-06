@@ -20,6 +20,9 @@ CONF_PRESET_CONFIGS = "presets"
 CONF_DEFAULT_PRESET = "default_preset"
 CONF_PRIORITY = "priority"
 
+# Optional temperature sensor entity ID to override the zone's temperature source
+CONF_TEMP_SENSOR_ENTITY_ID = "temp_sensor_entity_id"
+
 # Per-preset temperature keys (shared across all zones)
 CONF_HEAT_TEMP = "heat_temp"
 CONF_COOL_TEMP = "cool_temp"

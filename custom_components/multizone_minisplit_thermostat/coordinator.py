@@ -23,6 +23,7 @@ from .const import (
     CONF_ENTITY_ID,
     CONF_PRIORITY,
     CONF_QUIET_MODE_ENTITY,
+    CONF_TEMP_SENSOR_ENTITY_ID,
     DEFAULT_COOL_TEMP,
     DEFAULT_DEBOUNCE_INTERVAL,
     DEFAULT_DEBOUNCE_THRESHOLD,
@@ -299,17 +300,8 @@ class MiniSplitThermostatCoordinator:
         if outside_temp is None:
             return
 
-        zone_state = self.get_zone_state(entity_id)
-        if zone_state is None:
-            return
-
-        zone_temp = zone_state.get("current_temperature")
+        zone_temp = self._get_zone_current_temperature(entity_id)
         if zone_temp is None:
-            return
-
-        try:
-            zone_temp = float(zone_temp)
-        except (ValueError, TypeError):
             return
 
         # The mini-split temp is the same as the zone temp from the zone's
@@ -396,17 +388,8 @@ class MiniSplitThermostatCoordinator:
         if entity_id not in self._temperature_history:
             return
 
-        zone_state = self.get_zone_state(entity_id)
-        if zone_state is None:
-            return
-
-        current_temp = zone_state.get("current_temperature")
+        current_temp = self._get_zone_current_temperature(entity_id)
         if current_temp is None:
-            return
-
-        try:
-            current_temp = float(current_temp)
-        except (ValueError, TypeError):
             return
 
         now = time.time()
@@ -656,6 +639,34 @@ class MiniSplitThermostatCoordinator:
             "hvac_action": state.attributes.get("hvac_action"),
         }
 
+    def _get_zone_current_temperature(self, entity_id: str) -> float | None:
+        """Get the current temperature for a zone, using override sensor if configured."""
+        # Find zone config
+        zone_config = next((z for z in self.zone_configs if z[CONF_ENTITY_ID] == entity_id), None)
+        if zone_config is None:
+            return None
+
+        # Check for override sensor
+        temp_sensor_id = zone_config.get(CONF_TEMP_SENSOR_ENTITY_ID)
+        if temp_sensor_id:
+            state = self.hass.states.get(temp_sensor_id)
+            if state is not None and state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                try:
+                    return float(state.state)
+                except (ValueError, TypeError):
+                    pass
+
+        # Fallback to climate entity's current_temperature
+        zone_state = self.get_zone_state(entity_id)
+        if zone_state is not None:
+            current_temp = zone_state.get("current_temperature")
+            if current_temp is not None:
+                try:
+                    return float(current_temp)
+                except (ValueError, TypeError):
+                    pass
+        return None
+
     def determine_hvac_mode(self) -> HVACMode | None:
         """Determine the appropriate HVAC mode based on zone temperatures.
 
@@ -674,17 +685,8 @@ class MiniSplitThermostatCoordinator:
             entity_id = zone_config[CONF_ENTITY_ID]
             priority = zone_config.get(CONF_PRIORITY, DEFAULT_PRIORITY)
 
-            zone_state = self.get_zone_state(entity_id)
-            if zone_state is None:
-                continue
-
-            current_temp = zone_state.get("current_temperature")
+            current_temp = self._get_zone_current_temperature(entity_id)
             if current_temp is None:
-                continue
-
-            try:
-                current_temp = float(current_temp)
-            except (ValueError, TypeError):
                 continue
 
             heat_target = self._get_heat_target(entity_id)
@@ -759,6 +761,12 @@ class MiniSplitThermostatCoordinator:
             quiet_entity = zone_config.get(CONF_QUIET_MODE_ENTITY)
             if quiet_entity:
                 entity_ids.append(quiet_entity)
+
+        # Track temperature sensor entities if configured
+        for zone_config in self.zone_configs:
+            temp_sensor = zone_config.get(CONF_TEMP_SENSOR_ENTITY_ID)
+            if temp_sensor:
+                entity_ids.append(temp_sensor)
 
         @callback
         def _async_state_changed(event: Any) -> None:
