@@ -368,6 +368,7 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
         """Initialize options flow."""
         self._zones: list[dict[str, Any]] = []
         self._quiet_mode_zone_index: int | None = None
+        self._temp_sensor_zone_index: int | None = None
         self._minisplit_running_threshold: float = DEFAULT_MINISPLIT_RUNNING_THRESHOLD
 
     async def async_step_init(
@@ -397,6 +398,8 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
                 return await self.async_step_offset_learning()
             elif action == "quiet_mode":
                 return await self.async_step_quiet_mode()
+            elif action == "temp_sensor":
+                return await self.async_step_temp_sensor()
             elif action == "debounce":
                 return await self.async_step_debounce_config()
             elif action == "running_threshold":
@@ -421,6 +424,7 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
                             {"value": "outside_temp", "label": "Outside temperature sensor"},
                             {"value": "offset_learning", "label": "Offset learning"},
                             {"value": "quiet_mode", "label": "Quiet mode entity"},
+                            {"value": "temp_sensor", "label": "Temperature sensor override"},
                             {"value": "debounce", "label": "Debounce settings"},
                             {"value": "running_threshold", "label": "Running detection threshold"},
                             {"value": "done", "label": "Done"},
@@ -632,6 +636,56 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
             data_schema=vol.Schema({
                 vol.Optional(CONF_QUIET_MODE_ENTITY, default=current_quiet_entity): selector({
                     "entity": {"domain": ["input_boolean", "switch", "binary_sensor", "schedule"]}
+                }),
+            }),
+        )
+
+    async def async_step_temp_sensor(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Select a zone to configure its temperature sensor override."""
+        if user_input is not None:
+            self._temp_sensor_zone_index = int(user_input["zone_index"])
+            return await self.async_step_temp_sensor_edit()
+
+        zone_options = {}
+        for i, zone in enumerate(self._zones):
+            entity_id = zone[CONF_ENTITY_ID]
+            friendly = entity_id.split(".")[-1].replace("_", " ").title()
+            temp_sensor = zone.get(CONF_TEMP_SENSOR_ENTITY_ID)
+            if temp_sensor:
+                friendly += f" (sensor: {temp_sensor})"
+            else:
+                friendly += " (sensor: none)"
+            zone_options[str(i)] = friendly
+
+        return self.async_show_form(
+            step_id="temp_sensor",
+            data_schema=vol.Schema({
+                vol.Required("zone_index"): vol.In(zone_options),
+            }),
+        )
+
+    async def async_step_temp_sensor_edit(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Edit the temperature sensor override entity for a selected zone."""
+        zone = self._zones[self._temp_sensor_zone_index]
+        current_temp_sensor = zone.get(CONF_TEMP_SENSOR_ENTITY_ID)
+
+        if user_input is not None:
+            new_entity = user_input.get(CONF_TEMP_SENSOR_ENTITY_ID)
+            if new_entity:
+                zone[CONF_TEMP_SENSOR_ENTITY_ID] = new_entity
+            elif CONF_TEMP_SENSOR_ENTITY_ID in zone:
+                del zone[CONF_TEMP_SENSOR_ENTITY_ID]
+            return await self.async_step_manage_zones()
+
+        return self.async_show_form(
+            step_id="temp_sensor_edit",
+            data_schema=vol.Schema({
+                vol.Optional(CONF_TEMP_SENSOR_ENTITY_ID, default=current_temp_sensor): selector({
+                    "entity": {"domain": ["sensor", "number"]}
                 }),
             }),
         )
