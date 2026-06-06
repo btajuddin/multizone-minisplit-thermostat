@@ -19,18 +19,22 @@ from homeassistant.helpers.storage import Store
 
 from .const import (
     CONF_DEFAULT_PRESET,
+    CONF_DEBOUNCE_INTERVAL,
+    CONF_DEBOUNCE_THRESHOLD,
     CONF_ENABLE_OFFSET_LEARNING,
     CONF_ENTITY_ID,
+    CONF_MINISPLIT_RUNNING_THRESHOLD,
+    CONF_PRESET_CONFIGS,
     CONF_PRIORITY,
     CONF_QUIET_MODE_ENTITY,
     CONF_TEMP_SENSOR_ENTITY_ID,
+    CONF_ZONES,
     DEFAULT_COOL_TEMP,
     DEFAULT_DEBOUNCE_INTERVAL,
     DEFAULT_DEBOUNCE_THRESHOLD,
     DEFAULT_HEAT_TEMP,
-    DEFAULT_PRIORITY,
-    CONF_MINISPLIT_RUNNING_THRESHOLD,
     DEFAULT_MINISPLIT_RUNNING_THRESHOLD,
+    DEFAULT_PRIORITY,
     MINISPLIT_RUNNING_WINDOW,
     PRESET_COMFORT,
     PRESETS,
@@ -132,6 +136,18 @@ class MiniSplitThermostatCoordinator:
         await self._persist_option(CONF_MINISPLIT_RUNNING_THRESHOLD, value)
         self._notify_state_changed()
 
+    async def async_set_debounce_interval(self, value: int) -> None:
+        """Update the debounce interval."""
+        self._debounce_interval = value
+        await self._persist_option(CONF_DEBOUNCE_INTERVAL, value)
+        self._notify_state_changed()
+
+    async def async_set_debounce_threshold(self, value: float) -> None:
+        """Update the debounce threshold."""
+        self._debounce_threshold = value
+        await self._persist_option(CONF_DEBOUNCE_THRESHOLD, value)
+        self._notify_state_changed()
+
     @property
     def entity_presets(self) -> dict[str, str]:
         """Return the current preset for each zone."""
@@ -201,6 +217,7 @@ class MiniSplitThermostatCoordinator:
             self._preset_configs[preset] = {}
         key = "heat_temp" if mode == "heat" else "cool_temp"
         self._preset_configs[preset][key] = value
+        await self._persist_option(CONF_PRESET_CONFIGS, self._preset_configs)
         self._notify_state_changed()
         await self.async_push_temperatures()
 
@@ -605,6 +622,7 @@ class MiniSplitThermostatCoordinator:
         for zone_config in self.zone_configs:
             if zone_config[CONF_ENTITY_ID] == entity_id:
                 zone_config[CONF_PRIORITY] = priority
+                await self._persist_option(CONF_ZONES, self.zone_configs)
                 self._notify_state_changed()
                 return
 

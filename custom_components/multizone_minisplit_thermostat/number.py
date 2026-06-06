@@ -214,8 +214,7 @@ class DebounceIntervalNumber(NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         """Update the debounce interval."""
-        self.coordinator._debounce_interval = int(value)
-        self.coordinator._notify_state_changed()
+        await self.coordinator.async_set_debounce_interval(int(value))
 
 
 class DebounceThresholdNumber(NumberEntity):
@@ -257,8 +256,7 @@ class DebounceThresholdNumber(NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         """Update the debounce threshold."""
-        self.coordinator._debounce_threshold = value
-        self.coordinator._notify_state_changed()
+        await self.coordinator.async_set_debounce_threshold(value)
 
 
 class RunningThresholdNumber(NumberEntity):

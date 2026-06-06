@@ -48,9 +48,6 @@ def _build_add_zone_schema(exclude_entities: list[str] | None = None) -> vol.Sch
         vol.Optional(CONF_DEFAULT_PRESET, default="comfort"): selector({
             "select": {"options": PRESETS}
         }),
-        vol.Optional(CONF_PRIORITY, default=DEFAULT_PRIORITY): selector({
-            "number": {"min": 0, "max": 100, "step": 1, "mode": "box"}
-        }),
         vol.Optional(CONF_QUIET_MODE_ENTITY): selector({
             "entity": {"domain": ["input_boolean", "switch", "binary_sensor", "schedule"]}
         }),
@@ -121,7 +118,7 @@ class MultizoneMinisplitThermostatFlowHandler(
         lines.append(f"**Offset learning:** {offset_status}")
 
         lines.append(f"\n**Debounce:** {self._debounce_interval}s interval, {self._debounce_threshold}°F threshold")
-        lines.append(f"\n**Running detection:** {self._minisplit_running_threshold}°F/min threshold")
+        lines.append(f"**Running detection:** {self._minisplit_running_threshold}°F/min threshold")
 
         return "\n".join(lines)
 
@@ -155,10 +152,10 @@ class MultizoneMinisplitThermostatFlowHandler(
                 return await self.async_step_add_zone()
             elif action == "remove_zone":
                 return await self.async_step_remove_zone()
-            elif action == "preset_config":
-                return await self.async_step_preset_config()
             elif action == "outside_temp":
                 return await self.async_step_outside_temp()
+            elif action == "preset_config":
+                return await self.async_step_preset_config()
             elif action == "debounce_config":
                 return await self.async_step_debounce_config()
             elif action == "running_threshold":
@@ -177,8 +174,8 @@ class MultizoneMinisplitThermostatFlowHandler(
                         "options": [
                             {"value": "add_zone", "label": "Add a zone"},
                             {"value": "remove_zone", "label": "Remove a zone"},
-                            {"value": "preset_config", "label": "Configure presets"},
                             {"value": "outside_temp", "label": "Outside temp sensor"},
+                            {"value": "preset_config", "label": "Configure presets"},
                             {"value": "debounce_config", "label": "Debounce settings"},
                             {"value": "running_threshold", "label": "Running detection threshold"},
                             {"value": "done", "label": "Finish setup"},
@@ -218,6 +215,46 @@ class MultizoneMinisplitThermostatFlowHandler(
             data_schema=vol.Schema(schema_dict),
             errors=errors,
             description_placeholders={"presets": ", ".join(PRESETS)},
+        )
+
+    async def async_step_debounce_config(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Configure debounce settings (advanced)."""
+        if user_input is not None:
+            self._debounce_interval = user_input.get(CONF_DEBOUNCE_INTERVAL, DEFAULT_DEBOUNCE_INTERVAL)
+            self._debounce_threshold = user_input.get(CONF_DEBOUNCE_THRESHOLD, DEFAULT_DEBOUNCE_THRESHOLD)
+            return await self.async_step_configure()
+
+        return self.async_show_form(
+            step_id="debounce_config",
+            data_schema=vol.Schema({
+                vol.Optional(CONF_DEBOUNCE_INTERVAL, default=self._debounce_interval): selector({
+                    "number": {"min": 60, "max": 3600, "step": 60, "mode": "box", "unit_of_measurement": "s"}
+                }),
+                vol.Optional(CONF_DEBOUNCE_THRESHOLD, default=self._debounce_threshold): selector({
+                    "number": {"min": 0.1, "max": 5.0, "step": 0.1, "mode": "box", "unit_of_measurement": "°F"}
+                }),
+            }),
+            description_placeholders={
+                "info": "Debounce settings control how often temperature adjustments are pushed to mini-splits. Higher values reduce frequent changes but may slow response to temperature shifts."
+            },
+        )
+
+    async def async_step_running_threshold(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Configure running detection threshold."""
+        if user_input is not None:
+            self._minisplit_running_threshold = user_input.get(CONF_MINISPLIT_RUNNING_THRESHOLD, DEFAULT_MINISPLIT_RUNNING_THRESHOLD)
+            return await self.async_step_configure()
+
+        return self.async_show_form(
+            step_id="running_threshold",
+            data_schema=vol.Schema({
+                vol.Optional(CONF_MINISPLIT_RUNNING_THRESHOLD, default=self._minisplit_running_threshold): selector({
+                    "number": {"min": 0.01, "max": 1.0, "step": 0.01, "mode": "box", "unit_of_measurement": "°F/min"}
+                }),
+            }),
+            description_placeholders={
+                "info": "The minimum rate of temperature change (°F/min) required to detect that the minisplit is running. The detection also requires the temperature change direction to match the HVAC mode (rising in heat, falling in cool)."
+            },
         )
 
     async def async_step_outside_temp(self, user_input: dict[str, Any] | None = None) -> FlowResult:
@@ -266,7 +303,24 @@ class MultizoneMinisplitThermostatFlowHandler(
         exclude_entities = [z[CONF_ENTITY_ID] for z in self._zones]
         return self.async_show_form(
             step_id="add_zone",
-            data_schema=_build_add_zone_schema(exclude_entities),
+            data_schema=vol.Schema({
+                vol.Required(CONF_ENTITY_ID): selector({"entity": {
+                    "domain": "climate",
+                    "exclude_entities": exclude_entities,
+                }}),
+                vol.Optional(CONF_DEFAULT_PRESET, default="comfort"): selector({
+                    "select": {"options": PRESETS}
+                }),
+                vol.Optional(CONF_PRIORITY, default=DEFAULT_PRIORITY): selector({
+                    "number": {"min": 0, "max": 100, "step": 1, "mode": "box"}
+                }),
+                vol.Optional(CONF_QUIET_MODE_ENTITY): selector({
+                    "entity": {"domain": ["input_boolean", "switch", "binary_sensor", "schedule"]}
+                }),
+                vol.Optional(CONF_TEMP_SENSOR_ENTITY_ID): selector({
+                    "entity": {"domain": ["sensor", "number"]}
+                }),
+            }),
             errors=errors,
         )
 
@@ -289,46 +343,6 @@ class MultizoneMinisplitThermostatFlowHandler(
             data_schema=vol.Schema({
                 vol.Required("zone_index"): vol.In(zone_options),
             }),
-        )
-
-    async def async_step_debounce_config(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Configure debounce settings (advanced)."""
-        if user_input is not None:
-            self._debounce_interval = user_input.get(CONF_DEBOUNCE_INTERVAL, DEFAULT_DEBOUNCE_INTERVAL)
-            self._debounce_threshold = user_input.get(CONF_DEBOUNCE_THRESHOLD, DEFAULT_DEBOUNCE_THRESHOLD)
-            return await self.async_step_configure()
-
-        return self.async_show_form(
-            step_id="debounce_config",
-            data_schema=vol.Schema({
-                vol.Optional(CONF_DEBOUNCE_INTERVAL, default=self._debounce_interval): selector({
-                    "number": {"min": 60, "max": 3600, "step": 60, "mode": "box", "unit_of_measurement": "s"}
-                }),
-                vol.Optional(CONF_DEBOUNCE_THRESHOLD, default=self._debounce_threshold): selector({
-                    "number": {"min": 0.1, "max": 5.0, "step": 0.1, "mode": "box", "unit_of_measurement": "°F"}
-                }),
-            }),
-            description_placeholders={
-                "info": "Debounce settings control how often temperature adjustments are pushed to mini-splits. Higher values reduce frequent changes but may slow response to temperature shifts."
-            },
-        )
-
-    async def async_step_running_threshold(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Configure running detection threshold."""
-        if user_input is not None:
-            self._minisplit_running_threshold = user_input.get(CONF_MINISPLIT_RUNNING_THRESHOLD, DEFAULT_MINISPLIT_RUNNING_THRESHOLD)
-            return await self.async_step_configure()
-
-        return self.async_show_form(
-            step_id="running_threshold",
-            data_schema=vol.Schema({
-                vol.Optional(CONF_MINISPLIT_RUNNING_THRESHOLD, default=self._minisplit_running_threshold): selector({
-                    "number": {"min": 0.01, "max": 1.0, "step": 0.01, "mode": "box", "unit_of_measurement": "°F/min"}
-                }),
-            }),
-            description_placeholders={
-                "info": "The minimum rate of temperature change (°F/min) required to detect that the minisplit is running. The detection also requires the temperature change direction to match the HVAC mode (rising in heat, falling in cool)."
-            },
         )
 
     async def async_step_finalize(self, user_input: dict[str, Any] | None = None) -> FlowResult:
@@ -400,10 +414,6 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
                 return await self.async_step_quiet_mode()
             elif action == "temp_sensor":
                 return await self.async_step_temp_sensor()
-            elif action == "debounce":
-                return await self.async_step_debounce_config()
-            elif action == "running_threshold":
-                return await self.async_step_running_threshold()
             return await self.async_step_finalize()
 
         zone_names = []
@@ -425,8 +435,6 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
                             {"value": "offset_learning", "label": "Offset learning"},
                             {"value": "quiet_mode", "label": "Quiet mode entity"},
                             {"value": "temp_sensor", "label": "Temperature sensor override"},
-                            {"value": "debounce", "label": "Debounce settings"},
-                            {"value": "running_threshold", "label": "Running detection threshold"},
                             {"value": "done", "label": "Done"},
                         ],
                     }
@@ -487,56 +495,6 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
             }),
         )
 
-    async def async_step_debounce_config(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Configure debounce settings."""
-        merged = {**self.config_entry.data, **self.config_entry.options}
-        current_interval = merged.get(CONF_DEBOUNCE_INTERVAL, DEFAULT_DEBOUNCE_INTERVAL)
-        current_threshold = merged.get(CONF_DEBOUNCE_THRESHOLD, DEFAULT_DEBOUNCE_THRESHOLD)
-
-        if user_input is not None:
-            current_options = dict(self.config_entry.options)
-            current_options[CONF_DEBOUNCE_INTERVAL] = user_input.get(CONF_DEBOUNCE_INTERVAL, current_interval)
-            current_options[CONF_DEBOUNCE_THRESHOLD] = user_input.get(CONF_DEBOUNCE_THRESHOLD, current_threshold)
-            return self.async_create_entry(data=current_options)
-
-        return self.async_show_form(
-            step_id="debounce_config",
-            data_schema=vol.Schema({
-                vol.Optional(CONF_DEBOUNCE_INTERVAL, default=current_interval): selector({
-                    "number": {"min": 60, "max": 3600, "step": 60, "mode": "box", "unit_of_measurement": "s"}
-                }),
-                vol.Optional(CONF_DEBOUNCE_THRESHOLD, default=current_threshold): selector({
-                    "number": {"min": 0.1, "max": 5.0, "step": 0.1, "mode": "box", "unit_of_measurement": "°F"}
-                }),
-            }),
-        )
-
-    async def async_step_running_threshold(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Configure running detection threshold."""
-        merged = {**self.config_entry.data, **self.config_entry.options}
-        current_threshold = merged.get(CONF_MINISPLIT_RUNNING_THRESHOLD, DEFAULT_MINISPLIT_RUNNING_THRESHOLD)
-
-        if user_input is not None:
-            current_options = dict(self.config_entry.options)
-            current_options[CONF_MINISPLIT_RUNNING_THRESHOLD] = user_input.get(CONF_MINISPLIT_RUNNING_THRESHOLD, current_threshold)
-            return self.async_create_entry(data=current_options)
-
-        return self.async_show_form(
-            step_id="running_threshold",
-            data_schema=vol.Schema({
-                vol.Optional(CONF_MINISPLIT_RUNNING_THRESHOLD, default=current_threshold): selector({
-                    "number": {"min": 0.01, "max": 1.0, "step": 0.01, "mode": "box", "unit_of_measurement": "°F/min"}
-                }),
-            }),
-            description_placeholders={
-                "info": "The minimum rate of temperature change (°F/min) required to detect that the minisplit is running. The detection also requires the temperature change direction to match the HVAC mode (rising in heat, falling in cool)."
-            },
-        )
-
     async def async_step_add_zone(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -551,7 +509,7 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
                 zone_config = {
                     CONF_ENTITY_ID: entity_id,
                     CONF_DEFAULT_PRESET: user_input.get(CONF_DEFAULT_PRESET, "comfort"),
-                    CONF_PRIORITY: user_input.get(CONF_PRIORITY, DEFAULT_PRIORITY),
+                    CONF_PRIORITY: DEFAULT_PRIORITY,
                 }
                 if user_input.get(CONF_QUIET_MODE_ENTITY):
                     zone_config[CONF_QUIET_MODE_ENTITY] = user_input[CONF_QUIET_MODE_ENTITY]
@@ -694,11 +652,14 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Finalize and save options."""
+        current_options = dict(self.config_entry.options)
+        current_options[CONF_ZONES] = self._zones
+        
+        # Preserve running threshold if it exists, otherwise use merged default
         merged = {**self.config_entry.data, **self.config_entry.options}
-        current_threshold = merged.get(CONF_MINISPLIT_RUNNING_THRESHOLD, DEFAULT_MINISPLIT_RUNNING_THRESHOLD)
-        return self.async_create_entry(
-            data={
-                CONF_ZONES: self._zones,
-                CONF_MINISPLIT_RUNNING_THRESHOLD: current_threshold,
-            },
-        )
+        if CONF_MINISPLIT_RUNNING_THRESHOLD not in current_options:
+            current_options[CONF_MINISPLIT_RUNNING_THRESHOLD] = merged.get(
+                CONF_MINISPLIT_RUNNING_THRESHOLD, DEFAULT_MINISPLIT_RUNNING_THRESHOLD
+            )
+            
+        return self.async_create_entry(data=current_options)
