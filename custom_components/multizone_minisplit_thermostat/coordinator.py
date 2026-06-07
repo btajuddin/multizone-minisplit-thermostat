@@ -23,7 +23,6 @@ from .const import (
     CONF_DEBOUNCE_THRESHOLD,
     CONF_ENABLE_OFFSET_LEARNING,
     CONF_ENTITY_ID,
-    CONF_MINISPLIT_RUNNING_THRESHOLD,
     CONF_PRESET_CONFIGS,
     CONF_PRIORITY,
     CONF_QUIET_MODE_ENTITY,
@@ -33,9 +32,7 @@ from .const import (
     DEFAULT_DEBOUNCE_INTERVAL,
     DEFAULT_DEBOUNCE_THRESHOLD,
     DEFAULT_HEAT_TEMP,
-    DEFAULT_MINISPLIT_RUNNING_THRESHOLD,
     DEFAULT_PRIORITY,
-    MINISPLIT_RUNNING_WINDOW,
     PRESET_COMFORT,
     PRESETS,
     AUTOMATIC_MODE_COOLDOWN,
@@ -80,8 +77,6 @@ class MiniSplitThermostatCoordinator:
         outside_temp_entity: str | None = None,
         debounce_interval: int = DEFAULT_DEBOUNCE_INTERVAL,
         debounce_threshold: float = DEFAULT_DEBOUNCE_THRESHOLD,
-        enable_offset_learning: bool = True,
-        minisplit_running_threshold: float = DEFAULT_MINISPLIT_RUNNING_THRESHOLD,
     ) -> None:
         """Initialize the coordinator."""
         self.hass = hass
@@ -112,14 +107,12 @@ class MiniSplitThermostatCoordinator:
         self._outside_temp_entity = outside_temp_entity
         self._debounce_interval = debounce_interval
         self._debounce_threshold = debounce_threshold
-        self._enable_offset_learning = enable_offset_learning
         self._last_temp_adjust_time: dict[str, float] = {}
         self._current_offsets: dict[str, float] = {}
         self._offset_learners: dict[str, OffsetLearner] = {}
         self._last_recalc_time: float = 0.0
         self._storage: Store | None = None
-        self._temperature_history: dict[str, list[tuple[float, float]]] = {}
-        self._minisplit_running_threshold = minisplit_running_threshold
+        self._zone_offset_learning_enabled: dict[str, bool] = {}
 
         for zone_config in zone_configs:
             entity_id = zone_config[CONF_ENTITY_ID]
@@ -128,13 +121,7 @@ class MiniSplitThermostatCoordinator:
             )
             self._current_offsets[entity_id] = 0.0
             self._last_temp_adjust_time[entity_id] = 0.0
-            self._temperature_history[entity_id] = []
-
-    async def async_set_minisplit_running_threshold(self, value: float) -> None:
-        """Update the minisplit running detection threshold."""
-        self._minisplit_running_threshold = value
-        await self._persist_option(CONF_MINISPLIT_RUNNING_THRESHOLD, value)
-        self._notify_state_changed()
+            self._zone_offset_learning_enabled[entity_id] = zone_config.get(CONF_ENABLE_OFFSET_LEARNING, True)
 
     async def async_set_debounce_interval(self, value: int) -> None:
         """Update the debounce interval."""
@@ -178,22 +165,17 @@ class MiniSplitThermostatCoordinator:
         """Return the outside temperature entity."""
         return self._outside_temp_entity
 
-    @property
-    def offset_learning_enabled(self) -> bool:
-        """Return whether offset learning is enabled."""
-        return self._enable_offset_learning
-
-    async def async_set_offset_learning_enabled(self, enabled: bool) -> None:
-        """Enable or disable offset learning."""
-        self._enable_offset_learning = enabled
-
-        await self._persist_option(CONF_ENABLE_OFFSET_LEARNING, enabled)
-
-        if enabled and self._outside_temp_entity and not self._offset_learners:
-            await self.async_init_offset_learning()
-        elif not enabled:
-            self._current_offsets = {k: 0.0 for k in self._current_offsets}
-            await self.async_push_temperatures()
+    async def async_set_zone_offset_learning_enabled(self, entity_id: str, enabled: bool) -> None:
+        """Enable or disable offset learning for a specific zone."""
+        self._zone_offset_learning_enabled[entity_id] = enabled
+        
+        # Update zone_configs list
+        for zone_config in self.zone_configs:
+            if zone_config[CONF_ENTITY_ID] == entity_id:
+                zone_config[CONF_ENABLE_OFFSET_LEARNING] = enabled
+                break
+                
+        await self._persist_option(CONF_ZONES, self.zone_configs)
         self._notify_state_changed()
 
     def add_select_entity(self, entity: Any) -> None:
@@ -227,10 +209,6 @@ class MiniSplitThermostatCoordinator:
             _LOGGER.debug("No outside temperature entity configured, offset learning disabled")
             return
 
-        if not self._enable_offset_learning:
-            _LOGGER.debug("Offset learning is disabled")
-            return
-
         self._storage = Store(
             self.hass,
             STORAGE_VERSION_MAJOR,
@@ -240,6 +218,8 @@ class MiniSplitThermostatCoordinator:
 
         for zone_config in self.zone_configs:
             entity_id = zone_config[CONF_ENTITY_ID]
+            if not self._zone_offset_learning_enabled.get(entity_id, True):
+                continue
             learner = OffsetLearner(self.hass, entity_id, self._storage)
             self._offset_learners[entity_id] = learner
             await learner.async_load()
@@ -310,7 +290,7 @@ class MiniSplitThermostatCoordinator:
         if entity_id not in self._offset_learners:
             return
 
-        if not self._enable_offset_learning:
+        if not self._zone_offset_learning_enabled.get(entity_id, True):
             return
 
         outside_temp = self._get_outside_temp()
@@ -346,13 +326,13 @@ class MiniSplitThermostatCoordinator:
             _LOGGER.debug("Outside temperature unavailable, skipping offset recalculation")
             return
 
-        if not self._enable_offset_learning:
-            return
-
         any_changed = False
         now = time.time()
 
         for entity_id, learner in self._offset_learners.items():
+            if not self._zone_offset_learning_enabled.get(entity_id, True):
+                continue
+
             predicted_offset = learner.get_predicted_offset(outside_temp)
 
             if self.should_adjust_temperature(entity_id, predicted_offset):
@@ -399,88 +379,6 @@ class MiniSplitThermostatCoordinator:
                 self._last_temp_adjust_time[eid] = 0.0
                 await learner.async_persist()
             _LOGGER.info("Cleared offset history for all zones")
-
-    def update_temperature_history(self, entity_id: str) -> None:
-        """Record current temperature for a zone with timestamp."""
-        if entity_id not in self._temperature_history:
-            return
-
-        current_temp = self._get_zone_current_temperature(entity_id)
-        if current_temp is None:
-            return
-
-        now = time.time()
-        self._temperature_history[entity_id].append((now, current_temp))
-
-        # Prune entries older than the lookback window
-        cutoff = now - MINISPLIT_RUNNING_WINDOW
-        self._temperature_history[entity_id] = [
-            (ts, temp) for ts, temp in self._temperature_history[entity_id]
-            if ts >= cutoff
-        ]
-
-        _LOGGER.debug(
-            "Recorded temperature for %s: %.1f (history size: %d)",
-            entity_id,
-            current_temp,
-            len(self._temperature_history[entity_id]),
-        )
-
-    def is_minisplit_running(self, entity_id: str) -> bool:
-        """Determine if the minisplit is running based on temperature change rate.
-
-        Returns True if the temperature is changing in the direction expected
-        for the current HVAC mode at a rate exceeding the threshold.
-        - In HEAT mode: temperature must be rising
-        - In COOL mode: temperature must be falling
-        """
-        if self._hvac_mode not in (HVACMode.HEAT, HVACMode.COOL):
-            return False
-
-        history = self._temperature_history.get(entity_id, [])
-        if len(history) < 2:
-            return False
-
-        # Get the oldest and newest entries within the window
-        oldest_ts, oldest_temp = history[0]
-        newest_ts, newest_temp = history[-1]
-
-        time_diff_minutes = (newest_ts - oldest_ts) / 60.0
-        if time_diff_minutes < 1.0:  # Need at least 1 minute of data
-            return False
-
-        temp_diff = newest_temp - oldest_temp
-        rate_of_change = abs(temp_diff) / time_diff_minutes  # degrees F per minute
-
-        # Check direction matches mode: heating = temp rising, cooling = temp falling
-        if self._hvac_mode == HVACMode.HEAT:
-            direction_matches = temp_diff > 0  # temperature rising
-        else:
-            direction_matches = temp_diff < 0  # temperature falling
-
-        if not direction_matches:
-            _LOGGER.debug(
-                "Minisplit running check for %s: rate=%.4f F/min, threshold=%.4f, "
-                "direction=%s (expected %s), running=False",
-                entity_id,
-                rate_of_change,
-                "rising" if temp_diff > 0 else "falling",
-                "rising" if self._hvac_mode == HVACMode.HEAT else "falling",
-            )
-            return False
-
-        is_running = rate_of_change >= self._minisplit_running_threshold
-
-        _LOGGER.debug(
-            "Minisplit running check for %s: rate=%.4f F/min, threshold=%.4f, "
-            "direction=%s, running=%s",
-            entity_id,
-            rate_of_change,
-            "rising" if temp_diff > 0 else "falling",
-            is_running,
-        )
-
-        return is_running
 
     async def async_push_temperatures(self) -> None:
         """Push the current target temperatures to all underlying thermostats.
@@ -793,15 +691,11 @@ class MiniSplitThermostatCoordinator:
 
             # Record data point for offset learning
             changed_entity = event.data.get("entity_id")
-            if self._enable_offset_learning and changed_entity in self._offset_learners:
+            if changed_entity in self._offset_learners and self._zone_offset_learning_enabled.get(changed_entity, True):
                 self.hass.async_create_task(self.async_record_data_point(changed_entity))
 
-            # Update temperature history for running detection
-            if changed_entity in self._temperature_history:
-                self.update_temperature_history(changed_entity)
-
             # Recalculate offsets if outside temp changed
-            if self._enable_offset_learning and changed_entity == self._outside_temp_entity:
+            if changed_entity == self._outside_temp_entity:
                 now = time.time()
                 if now - self._last_recalc_time >= OFFSET_RECALC_INTERVAL:
                     self.hass.async_create_task(self.async_recalculate_offsets())

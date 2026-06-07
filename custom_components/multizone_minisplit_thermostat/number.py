@@ -14,12 +14,10 @@ from .const import (
     CONF_DEBOUNCE_INTERVAL,
     CONF_DEBOUNCE_THRESHOLD,
     CONF_ENTITY_ID,
-    CONF_MINISPLIT_RUNNING_THRESHOLD,
     CONF_PRIORITY,
     CONF_ZONES,
     DEFAULT_DEBOUNCE_INTERVAL,
     DEFAULT_DEBOUNCE_THRESHOLD,
-    DEFAULT_MINISPLIT_RUNNING_THRESHOLD,
     DEFAULT_PRIORITY,
     DOMAIN,
     PRESETS,
@@ -72,11 +70,6 @@ async def async_setup_entry(
     debounce_threshold_entity = DebounceThresholdNumber(coordinator=coordinator)
     coordinator.add_number_entity(debounce_threshold_entity)
     entities.append(debounce_threshold_entity)
-
-    # Create running threshold configuration entity (global)
-    running_threshold_entity = RunningThresholdNumber(coordinator=coordinator)
-    coordinator.add_number_entity(running_threshold_entity)
-    entities.append(running_threshold_entity)
 
     async_add_entities(entities)
 
@@ -257,45 +250,3 @@ class DebounceThresholdNumber(NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Update the debounce threshold."""
         await self.coordinator.async_set_debounce_threshold(value)
-
-
-class RunningThresholdNumber(NumberEntity):
-    """Number entity for controlling the minisplit running detection threshold (°F/min)."""
-
-    _attr_has_entity_name = True
-    _attr_entity_category = EntityCategory.CONFIG
-    _attr_native_min_value = 0.01
-    _attr_native_max_value = 1.0
-    _attr_native_step = 0.01
-    _attr_mode = NumberMode.BOX
-    _attr_native_unit_of_measurement = "°F/min"
-
-    def __init__(
-        self,
-        coordinator: MiniSplitThermostatCoordinator,
-    ) -> None:
-        """Initialize the running threshold number entity."""
-        self.coordinator = coordinator
-
-        self._attr_name = "Running Threshold"
-        self._attr_unique_id = f"{coordinator.entry_id}_running_threshold"
-        self.entity_id = async_generate_entity_id(
-            NUMBER_ENTITY_ID_FORMAT,
-            f"{coordinator.entry_name}_running_threshold",
-            hass=coordinator.hass,
-        )
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.entry_id)},
-            name=coordinator.entry_name,
-            manufacturer="Multi-Zone Mini-Split Thermostat",
-            model="Virtual Thermostat",
-        )
-
-    @property
-    def native_value(self) -> float:
-        """Return the current running threshold."""
-        return self.coordinator._minisplit_running_threshold
-
-    async def async_set_native_value(self, value: float) -> None:
-        """Update the running threshold."""
-        await self.coordinator.async_set_minisplit_running_threshold(value)
