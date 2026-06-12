@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 from typing import Any
 
@@ -104,7 +104,7 @@ class OffsetSensor(SensorEntity):
 
         last_calc = model_info.get("last_calculation")
         if last_calc:
-            attrs["last_calculation"] = datetime.fromtimestamp(last_calc).isoformat()
+            attrs["last_calculation"] = datetime.fromtimestamp(last_calc, tz=timezone.utc).isoformat()
 
         return attrs
 
@@ -324,5 +324,5 @@ class OffsetLearnerLastCalculationSensor(SensorEntity):
         model_info = learner.get_model_info()
         last_calc = model_info.get("last_calculation", 0.0)
         if last_calc > 0:
-            return datetime.fromtimestamp(last_calc)
+            return datetime.fromtimestamp(last_calc, tz=timezone.utc)
         return None
