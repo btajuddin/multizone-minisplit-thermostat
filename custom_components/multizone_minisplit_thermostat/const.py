@@ -63,3 +63,7 @@ OFFSET_MAX_VALUE = 5.0  # maximum absolute offset in degrees F (clamp)
 # Service constants
 SERVICE_RECALCULATE_OFFSETS = "recalculate_offsets"
 SERVICE_CLEAR_OFFSET_HISTORY = "clear_offset_history"
+
+# Reconciliation
+RECONCILE_INTERVAL = 60
+RECONCILE_TEMP_TOLERANCE = 0.5
