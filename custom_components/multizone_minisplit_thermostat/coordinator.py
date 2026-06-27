@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 import logging
 import time
 from typing import Any
@@ -14,7 +15,10 @@ from homeassistant.const import (
     STATE_UNKNOWN,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import (
+    async_track_state_change_event,
+    async_track_time_interval,
+)
 from homeassistant.helpers.storage import Store
 
 from .const import (
@@ -38,6 +42,8 @@ from .const import (
     AUTOMATIC_MODE_COOLDOWN,
     TEMPERATURE_TOLERANCE,
     OFFSET_RECALC_INTERVAL,
+    RECONCILE_INTERVAL,
+    RECONCILE_TEMP_TOLERANCE,
 )
 from .offset_learner import (
     OffsetLearner,
@@ -101,6 +107,7 @@ class MiniSplitThermostatCoordinator:
         self._select_entities: list = []
         self._number_entities: list = []
         self._remove_trackers: list = []
+        self._remove_reconcile_tracker = None
         self._last_auto_mode_change: float = 0.0
 
         # Offset learning and debounce
@@ -448,6 +455,63 @@ class MiniSplitThermostatCoordinator:
 
         self._last_auto_mode_change = time.time()
 
+    async def async_reconcile_zones(self) -> None:
+        """Reconcile underlying climate entities with expected state.
+
+        Runs periodically. For each zone, checks that the HVAC mode and
+        setpoint match what the integration expects. If they diverge
+        (e.g. someone adjusted the mini-split directly), pushes the
+        correct values.
+        """
+        if self._hvac_mode is None:
+            return
+
+        for zone_config in self.zone_configs:
+            entity_id = zone_config[CONF_ENTITY_ID]
+            state = self.hass.states.get(entity_id)
+            if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                continue
+
+            expected_mode = self._hvac_mode.value
+            if state.state != expected_mode:
+                _LOGGER.info(
+                    "Reconcile: %s mode is %s, expected %s — correcting",
+                    entity_id,
+                    state.state,
+                    expected_mode,
+                )
+                await self.hass.services.async_call(
+                    "climate",
+                    "set_hvac_mode",
+                    {"entity_id": entity_id, "hvac_mode": expected_mode},
+                )
+
+            if self.is_quiet_mode_active(entity_id):
+                continue
+
+            current_temp = state.attributes.get("temperature")
+            expected_temp = self.get_target_temp(entity_id)
+            if current_temp is None:
+                continue
+
+            try:
+                current_temp = float(current_temp)
+            except (ValueError, TypeError):
+                continue
+
+            if abs(current_temp - expected_temp) > RECONCILE_TEMP_TOLERANCE:
+                _LOGGER.info(
+                    "Reconcile: %s setpoint %.1f differs from expected %.1f — correcting",
+                    entity_id,
+                    current_temp,
+                    expected_temp,
+                )
+                await self.hass.services.async_call(
+                    "climate",
+                    "set_temperature",
+                    {"entity_id": entity_id, "temperature": expected_temp},
+                )
+
     async def _persist_option(self, key: str, value: Any) -> None:
         """Persist a single option to the config entry options if changed."""
         entry = self.hass.config_entries.async_get_entry(self.entry_id)
@@ -707,8 +771,17 @@ class MiniSplitThermostatCoordinator:
         )
         self._remove_trackers.append(tracker)
 
+        self._remove_reconcile_tracker = async_track_time_interval(
+            self.hass,
+            lambda _: self.hass.async_create_task(self.async_reconcile_zones()),
+            timedelta(seconds=RECONCILE_INTERVAL),
+        )
+
     def cleanup(self) -> None:
         """Remove all state change listeners."""
         for remove_tracker in self._remove_trackers:
             remove_tracker()
         self._remove_trackers.clear()
+        if self._remove_reconcile_tracker is not None:
+            self._remove_reconcile_tracker()
+            self._remove_reconcile_tracker = None
