@@ -486,9 +486,6 @@ class MiniSplitThermostatCoordinator:
                     {"entity_id": entity_id, "hvac_mode": expected_mode},
                 )
 
-            if self.is_quiet_mode_active(entity_id):
-                continue
-
             current_temp = state.attributes.get("temperature")
             expected_temp = self.get_target_temp(entity_id)
             if current_temp is None:
