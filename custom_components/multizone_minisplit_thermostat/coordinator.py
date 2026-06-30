@@ -22,6 +22,7 @@ from homeassistant.helpers.event import (
 from homeassistant.helpers.storage import Store
 
 from .const import (
+    ATTR_ZONE_PRESETS,
     CONF_DEFAULT_PRESET,
     CONF_DEBOUNCE_INTERVAL,
     CONF_DEBOUNCE_THRESHOLD,
@@ -102,7 +103,10 @@ class MiniSplitThermostatCoordinator:
             self._hvac_mode = None
         self.zone_configs = zone_configs
         self._preset_configs: dict[str, dict[str, float]] = preset_configs
-        self._zone_presets: dict[str, str] = {}
+        # Restore per-zone preset selections from options, falling back to
+        # each zone's configured default for zones that have no stored value.
+        stored_zone_presets: dict[str, str] = entry.options.get(ATTR_ZONE_PRESETS, {})
+        self._zone_presets: dict[str, str] = dict(stored_zone_presets)
         self._auto_mode: bool = False
         self._select_entities: list = []
         self._number_entities: list = []
@@ -123,9 +127,10 @@ class MiniSplitThermostatCoordinator:
 
         for zone_config in zone_configs:
             entity_id = zone_config[CONF_ENTITY_ID]
-            self._zone_presets[entity_id] = zone_config.get(
-                CONF_DEFAULT_PRESET, PRESET_COMFORT
-            )
+            if entity_id not in self._zone_presets:
+                self._zone_presets[entity_id] = zone_config.get(
+                    CONF_DEFAULT_PRESET, PRESET_COMFORT
+                )
             self._current_offsets[entity_id] = 0.0
             self._last_temp_adjust_time[entity_id] = 0.0
             self._zone_offset_learning_enabled[entity_id] = zone_config.get(CONF_ENABLE_OFFSET_LEARNING, True)
@@ -543,6 +548,7 @@ class MiniSplitThermostatCoordinator:
             _LOGGER.warning("Invalid preset: %s", preset)
             return
         self._zone_presets[entity_id] = preset
+        await self._persist_option(ATTR_ZONE_PRESETS, self._zone_presets)
         await self.async_push_temperatures()
 
     async def async_set_hvac_mode(self, mode: HVACMode) -> None:
