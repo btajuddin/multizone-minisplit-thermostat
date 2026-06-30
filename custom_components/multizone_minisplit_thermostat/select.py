@@ -15,7 +15,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import (
     CONF_DEFAULT_PRESET,
     CONF_ENTITY_ID,
-    CONF_ZONES,
     DOMAIN,
     PRESETS,
 )
@@ -29,11 +28,12 @@ async def async_setup_entry(
 ) -> None:
     """Set up the select platform."""
     from . import _get_coordinator
+
     coordinator = _get_coordinator(entry.entry_id)
     if coordinator is None:
         return
 
-    entities = []
+    entities: list[Any] = []
 
     # Create mode select
     mode_select = ModeSelect(coordinator)
@@ -87,7 +87,9 @@ class ZonePresetSelect(SelectEntity):
         # Create a unique device for this zone
         zone_name = underlying_entity_id.split(".")[-1].replace("_", " ").title()
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{coordinator.entry_id}_zone_{underlying_entity_id}")},
+            identifiers={
+                (DOMAIN, f"{coordinator.entry_id}_zone_{underlying_entity_id}")
+            },
             name=f"{coordinator.entry_name} - {zone_name}",
             manufacturer="Multi-Zone Mini-Split Thermostat",
             model="Zone Controller",

@@ -19,14 +19,10 @@ from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_time_interval,
 )
-from homeassistant.helpers.storage import Store
 
 from .const import (
     ATTR_ZONE_PRESETS,
     CONF_DEFAULT_PRESET,
-    CONF_DEBOUNCE_INTERVAL,
-    CONF_DEBOUNCE_THRESHOLD,
-    CONF_ENABLE_OFFSET_LEARNING,
     CONF_ENTITY_ID,
     CONF_PRESET_CONFIGS,
     CONF_PRIORITY,
@@ -34,46 +30,21 @@ from .const import (
     CONF_TEMP_SENSOR_ENTITY_ID,
     CONF_ZONES,
     DEFAULT_COOL_TEMP,
-    DEFAULT_DEBOUNCE_INTERVAL,
-    DEFAULT_DEBOUNCE_THRESHOLD,
     DEFAULT_HEAT_TEMP,
     DEFAULT_PRIORITY,
     PRESET_COMFORT,
     PRESETS,
     AUTOMATIC_MODE_COOLDOWN,
     TEMPERATURE_TOLERANCE,
-    OFFSET_RECALC_INTERVAL,
     RECONCILE_INTERVAL,
     RECONCILE_TEMP_TOLERANCE,
-)
-from .offset_learner import (
-    OffsetLearner,
-    STORAGE_KEY,
-    STORAGE_VERSION_MAJOR,
-    STORAGE_VERSION_MINOR,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class MiniSplitThermostatCoordinator:
-    """Coordinator for managing state across multiple mini-split zones.
-
-    Preset temperature configurations (heat_temp/cool_temp per preset) are
-    shared across all zones. Each zone tracks which preset is currently
-    active independently.
-
-    The coordinator automatically determines whether to be in HEAT or COOL
-    mode based on zone temperatures. If any zone is outside its comfort
-    band (target ± tolerance), the mode is set to meet that need. When
-    zones conflict, the highest priority zone wins.
-
-    Features:
-    - Offset learning: learns temperature offset between zone thermostats
-      and mini-splits using outside temperature as a predictor
-    - Quiet mode: prevents temperature adjustments during quiet hours
-    - Debounce: prevents rapid/tiny temperature changes
-    """
+    """Coordinator for managing state across multiple mini-split zones."""
 
     def __init__(
         self,
@@ -81,9 +52,6 @@ class MiniSplitThermostatCoordinator:
         entry: ConfigEntry,
         zone_configs: list[dict[str, Any]],
         preset_configs: dict[str, dict[str, float]],
-        outside_temp_entity: str | None = None,
-        debounce_interval: int = DEFAULT_DEBOUNCE_INTERVAL,
-        debounce_threshold: float = DEFAULT_DEBOUNCE_THRESHOLD,
     ) -> None:
         """Initialize the coordinator."""
         self.hass = hass
@@ -97,10 +65,9 @@ class MiniSplitThermostatCoordinator:
         self._entry_name = name
         # Restore mode from options, or determine on startup
         stored_mode = entry.options.get("mode")
-        if stored_mode:
-            self._hvac_mode = HVACMode(stored_mode)
-        else:
-            self._hvac_mode = None
+        self._hvac_mode: HVACMode | None = (
+            HVACMode(stored_mode) if stored_mode else None
+        )
         self.zone_configs = zone_configs
         self._preset_configs: dict[str, dict[str, float]] = preset_configs
         # Restore per-zone preset selections from options, falling back to
@@ -108,22 +75,11 @@ class MiniSplitThermostatCoordinator:
         stored_zone_presets: dict[str, str] = entry.options.get(ATTR_ZONE_PRESETS, {})
         self._zone_presets: dict[str, str] = dict(stored_zone_presets)
         self._auto_mode: bool = False
-        self._select_entities: list = []
-        self._number_entities: list = []
-        self._remove_trackers: list = []
+        self._select_entities: list[Any] = []
+        self._number_entities: list[Any] = []
+        self._remove_trackers: list[Any] = []
         self._remove_reconcile_tracker = None
         self._last_auto_mode_change: float = 0.0
-
-        # Offset learning and debounce
-        self._outside_temp_entity = outside_temp_entity
-        self._debounce_interval = debounce_interval
-        self._debounce_threshold = debounce_threshold
-        self._last_temp_adjust_time: dict[str, float] = {}
-        self._current_offsets: dict[str, float] = {}
-        self._offset_learners: dict[str, OffsetLearner] = {}
-        self._last_recalc_time: float = 0.0
-        self._storage: Store | None = None
-        self._zone_offset_learning_enabled: dict[str, bool] = {}
 
         for zone_config in zone_configs:
             entity_id = zone_config[CONF_ENTITY_ID]
@@ -131,21 +87,6 @@ class MiniSplitThermostatCoordinator:
                 self._zone_presets[entity_id] = zone_config.get(
                     CONF_DEFAULT_PRESET, PRESET_COMFORT
                 )
-            self._current_offsets[entity_id] = 0.0
-            self._last_temp_adjust_time[entity_id] = 0.0
-            self._zone_offset_learning_enabled[entity_id] = zone_config.get(CONF_ENABLE_OFFSET_LEARNING, True)
-
-    async def async_set_debounce_interval(self, value: int) -> None:
-        """Update the debounce interval."""
-        self._debounce_interval = value
-        await self._persist_option(CONF_DEBOUNCE_INTERVAL, value)
-        self._notify_state_changed()
-
-    async def async_set_debounce_threshold(self, value: float) -> None:
-        """Update the debounce threshold."""
-        self._debounce_threshold = value
-        await self._persist_option(CONF_DEBOUNCE_THRESHOLD, value)
-        self._notify_state_changed()
 
     @property
     def entity_presets(self) -> dict[str, str]:
@@ -161,34 +102,6 @@ class MiniSplitThermostatCoordinator:
     def entry_name(self) -> str:
         """Return the thermostat name."""
         return self._entry_name
-
-    @property
-    def current_offsets(self) -> dict[str, float]:
-        """Return the current learned offsets per zone."""
-        return dict(self._current_offsets)
-
-    @property
-    def offset_learners(self) -> dict[str, OffsetLearner]:
-        """Return the offset learners per zone."""
-        return dict(self._offset_learners)
-
-    @property
-    def outside_temp_entity(self) -> str | None:
-        """Return the outside temperature entity."""
-        return self._outside_temp_entity
-
-    async def async_set_zone_offset_learning_enabled(self, entity_id: str, enabled: bool) -> None:
-        """Enable or disable offset learning for a specific zone."""
-        self._zone_offset_learning_enabled[entity_id] = enabled
-        
-        # Update zone_configs list
-        for zone_config in self.zone_configs:
-            if zone_config[CONF_ENTITY_ID] == entity_id:
-                zone_config[CONF_ENABLE_OFFSET_LEARNING] = enabled
-                break
-                
-        await self._persist_option(CONF_ZONES, self.zone_configs)
-        self._notify_state_changed()
 
     def add_select_entity(self, entity: Any) -> None:
         """Register a select entity for state update callbacks."""
@@ -215,35 +128,6 @@ class MiniSplitThermostatCoordinator:
         self._notify_state_changed()
         await self.async_push_temperatures()
 
-    async def async_init_offset_learning(self) -> None:
-        """Initialize offset learning system and load persisted data."""
-        if self._outside_temp_entity is None:
-            _LOGGER.debug("No outside temperature entity configured, offset learning disabled")
-            return
-
-        self._storage = Store(
-            self.hass,
-            STORAGE_VERSION_MAJOR,
-            STORAGE_KEY,
-            minor_version=STORAGE_VERSION_MINOR,
-        )
-
-        for zone_config in self.zone_configs:
-            entity_id = zone_config[CONF_ENTITY_ID]
-            if not self._zone_offset_learning_enabled.get(entity_id, True):
-                continue
-            learner = OffsetLearner(self.hass, entity_id, self._storage)
-            self._offset_learners[entity_id] = learner
-            await learner.async_load()
-            _LOGGER.debug(
-                "Initialized offset learner for %s (%d samples)",
-                entity_id,
-                learner.get_sample_count(),
-            )
-
-        # Perform initial recalculation
-        await self.async_recalculate_offsets()
-
     def is_quiet_mode_active(self, entity_id: str) -> bool:
         """Check if quiet mode is active for a zone."""
         zone_config = None
@@ -269,137 +153,11 @@ class MiniSplitThermostatCoordinator:
         """Get the active preset for a zone."""
         return self._zone_presets.get(entity_id, PRESET_COMFORT)
 
-    def should_adjust_temperature(self, entity_id: str, new_offset: float) -> bool:
-        """Check if temperature adjustment should be applied (debounce)."""
-        last_adjust = self._last_temp_adjust_time.get(entity_id, 0.0)
-        current_offset = self._current_offsets.get(entity_id, 0.0)
-
-        # Time-based debounce
-        elapsed = time.time() - last_adjust
-        if elapsed < self._debounce_interval:
-            return False
-
-        # Threshold-based debounce
-        if abs(new_offset - current_offset) < self._debounce_threshold:
-            return False
-
-        return True
-
-    def _get_outside_temp(self) -> float | None:
-        """Get the current outside temperature from the configured entity."""
-        if self._outside_temp_entity is None:
-            return None
-        state = self.hass.states.get(self._outside_temp_entity)
-        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            return None
-        try:
-            return float(state.state)
-        except (ValueError, TypeError):
-            return None
-
-    async def async_record_data_point(self, entity_id: str) -> None:
-        """Collect a data point for offset learning."""
-        if entity_id not in self._offset_learners:
-            return
-
-        if not self._zone_offset_learning_enabled.get(entity_id, True):
-            return
-
-        outside_temp = self._get_outside_temp()
-        if outside_temp is None:
-            return
-
-        zone_temp = self._get_zone_current_temperature(entity_id)
-        if zone_temp is None:
-            return
-
-        # The mini-split temp is the same as the zone temp from the zone's
-        # perspective since we're reading the zone's underlying climate entity
-        # which IS the mini-split. The offset is between what the thermostat
-        # target says vs what the mini-split reports.
-        minisplit_temp = zone_temp
-
-        learner = self._offset_learners[entity_id]
-        learner.add_data_point(outside_temp, zone_temp, minisplit_temp)
-        await learner.async_persist()
-
-        _LOGGER.debug(
-            "Recorded data point for %s: outside=%.1f, zone=%.1f, ms=%.1f",
-            entity_id,
-            outside_temp,
-            zone_temp,
-            minisplit_temp,
-        )
-
-    async def async_recalculate_offsets(self) -> None:
-        """Recalculate offsets for all zones from learners."""
-        outside_temp = self._get_outside_temp()
-        if outside_temp is None:
-            _LOGGER.debug("Outside temperature unavailable, skipping offset recalculation")
-            return
-
-        any_changed = False
-        now = time.time()
-
-        for entity_id, learner in self._offset_learners.items():
-            if not self._zone_offset_learning_enabled.get(entity_id, True):
-                continue
-
-            predicted_offset = learner.get_predicted_offset(outside_temp)
-
-            if self.should_adjust_temperature(entity_id, predicted_offset):
-                old_offset = self._current_offsets.get(entity_id, 0.0)
-                self._current_offsets[entity_id] = predicted_offset
-                self._last_temp_adjust_time[entity_id] = now
-                any_changed = True
-                _LOGGER.info(
-                    "Updated offset for %s: %.3f -> %.3f",
-                    entity_id,
-                    old_offset,
-                    predicted_offset,
-                )
-            else:
-                _LOGGER.debug(
-                    "Offset for %s unchanged (debounce): predicted=%.3f, current=%.3f",
-                    entity_id,
-                    predicted_offset,
-                    self._current_offsets.get(entity_id, 0.0),
-                )
-
-        self._last_recalc_time = now
-
-        # Persist all learners
-        for learner in self._offset_learners.values():
-            await learner.async_persist()
-
-        if any_changed:
-            await self.async_push_temperatures()
-
-    async def async_clear_offset_history(self, entity_id: str | None = None) -> None:
-        """Clear offset history for one zone or all zones."""
-        if entity_id is not None:
-            if entity_id in self._offset_learners:
-                self._offset_learners[entity_id].clear_history()
-                self._current_offsets[entity_id] = 0.0
-                self._last_temp_adjust_time[entity_id] = 0.0
-                await self._offset_learners[entity_id].async_persist()
-                _LOGGER.info("Cleared offset history for %s", entity_id)
-        else:
-            for eid, learner in self._offset_learners.items():
-                learner.clear_history()
-                self._current_offsets[eid] = 0.0
-                self._last_temp_adjust_time[eid] = 0.0
-                await learner.async_persist()
-            _LOGGER.info("Cleared offset history for all zones")
-
     async def async_push_temperatures(self) -> None:
         """Push the current target temperatures to all underlying thermostats.
 
-        Respects quiet mode and debounce settings.
+        Respects quiet mode settings.
         """
-        outside_temp = self._get_outside_temp()
-        now = time.time()
-
         for zone_config in self.zone_configs:
             entity_id = zone_config[CONF_ENTITY_ID]
             base_target = self.get_target_temp(entity_id)
@@ -438,7 +196,9 @@ class MiniSplitThermostatCoordinator:
 
             # Skip temperature sync if quiet mode is active
             if self.is_quiet_mode_active(entity_id):
-                _LOGGER.debug("Skipping zone sync for %s (quiet mode active)", entity_id)
+                _LOGGER.debug(
+                    "Skipping zone sync for %s (quiet mode active)", entity_id
+                )
                 await self.hass.services.async_call(
                     "climate",
                     "set_hvac_mode",
@@ -592,15 +352,10 @@ class MiniSplitThermostatCoordinator:
                 return
 
     def get_target_temp(self, entity_id: str) -> float:
-        """Get the target temperature for a zone based on its preset, mode, and offset."""
+        """Get the target temperature for a zone based on its preset and mode."""
         if self._hvac_mode == HVACMode.HEAT:
-            base = self._get_heat_target(entity_id)
-        else:
-            base = self._get_cool_target(entity_id)
-
-        # Apply learned offset
-        offset = self._current_offsets.get(entity_id, 0.0)
-        return base + offset
+            return self._get_heat_target(entity_id)
+        return self._get_cool_target(entity_id)
 
     def get_all_target_temps(self) -> dict[str, float]:
         """Get target temperatures for all zones."""
@@ -625,7 +380,9 @@ class MiniSplitThermostatCoordinator:
     def _get_zone_current_temperature(self, entity_id: str) -> float | None:
         """Get the current temperature for a zone, using override sensor if configured."""
         # Find zone config
-        zone_config = next((z for z in self.zone_configs if z[CONF_ENTITY_ID] == entity_id), None)
+        zone_config = next(
+            (z for z in self.zone_configs if z[CONF_ENTITY_ID] == entity_id), None
+        )
         if zone_config is None:
             return None
 
@@ -633,7 +390,10 @@ class MiniSplitThermostatCoordinator:
         temp_sensor_id = zone_config.get(CONF_TEMP_SENSOR_ENTITY_ID)
         if temp_sensor_id:
             state = self.hass.states.get(temp_sensor_id)
-            if state is not None and state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            if state is not None and state.state not in (
+                STATE_UNAVAILABLE,
+                STATE_UNKNOWN,
+            ):
                 try:
                     return float(state.state)
                 except (ValueError, TypeError):
@@ -735,10 +495,6 @@ class MiniSplitThermostatCoordinator:
         """Set up state change listeners for underlying zones."""
         entity_ids = [z[CONF_ENTITY_ID] for z in self.zone_configs]
 
-        # Also track outside temp entity if configured
-        if self._outside_temp_entity:
-            entity_ids.append(self._outside_temp_entity)
-
         # Track quiet mode entities if configured
         for zone_config in self.zone_configs:
             quiet_entity = zone_config.get(CONF_QUIET_MODE_ENTITY)
@@ -755,18 +511,6 @@ class MiniSplitThermostatCoordinator:
         def _async_state_changed(event: Any) -> None:
             """Handle state change events."""
             self.hass.async_create_task(self.async_check_and_update_mode())
-
-            # Record data point for offset learning
-            changed_entity = event.data.get("entity_id")
-            if changed_entity in self._offset_learners and self._zone_offset_learning_enabled.get(changed_entity, True):
-                self.hass.async_create_task(self.async_record_data_point(changed_entity))
-
-            # Recalculate offsets if outside temp changed
-            if changed_entity == self._outside_temp_entity:
-                now = time.time()
-                if now - self._last_recalc_time >= OFFSET_RECALC_INTERVAL:
-                    self.hass.async_create_task(self.async_recalculate_offsets())
-
             self._notify_state_changed()
 
         tracker = async_track_state_change_event(

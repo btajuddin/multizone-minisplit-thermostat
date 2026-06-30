@@ -46,23 +46,14 @@ TEMPERATURE_TOLERANCE = 1.0  # degrees F before triggering mode change
 
 AUTOMATIC_MODE_COOLDOWN = 300  # 5 minutes in seconds
 
-# Offset learning and quiet mode configuration keys
-CONF_OUTSIDE_TEMP_ENTITY = "outside_temp_entity"
+# Quiet mode configuration keys
 CONF_QUIET_MODE_ENTITY = "quiet_mode_entity"
 CONF_DEBOUNCE_INTERVAL = "debounce_interval"
 CONF_DEBOUNCE_THRESHOLD = "debounce_threshold"
-CONF_ENABLE_OFFSET_LEARNING = "enable_offset_learning"
 
-# Offset learning and debounce defaults
+# Debounce defaults
 DEFAULT_DEBOUNCE_INTERVAL = 900  # 15 minutes in seconds
 DEFAULT_DEBOUNCE_THRESHOLD = 0.5  # degrees F
-OFFSET_LEARNING_WINDOW = 2592000  # 30 days in seconds
-OFFSET_RECALC_INTERVAL = 300  # recalculate every 5 minutes
-OFFSET_MAX_VALUE = 5.0  # maximum absolute offset in degrees F (clamp)
-
-# Service constants
-SERVICE_RECALCULATE_OFFSETS = "recalculate_offsets"
-SERVICE_CLEAR_OFFSET_HISTORY = "clear_offset_history"
 
 # Reconciliation
 RECONCILE_INTERVAL = 60
