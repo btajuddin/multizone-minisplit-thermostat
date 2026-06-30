@@ -15,21 +15,22 @@ from homeassistant.helpers.selector import selector
 from .const import (
     CONF_DEFAULT_PRESET,
     CONF_ENTITY_ID,
+    CONF_MAX_ADJUSTMENT,
     CONF_PRESET_CONFIGS,
     CONF_PRIORITY,
     CONF_QUIET_MODE_ENTITY,
     CONF_TEMP_SENSOR_ENTITY_ID,
     CONF_ZONES,
+    DEFAULT_MAX_ADJUSTMENT,
     DEFAULT_PRIORITY,
     DOMAIN,
+    MAX_MAX_ADJUSTMENT,
+    MIN_MAX_ADJUSTMENT,
     PRESETS,
+    STEP_MAX_ADJUSTMENT,
 )
 
-STEP_USER_DATA_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_NAME): str,
-    }
-)
+STEP_USER_DATA_SCHEMA = vol.Schema({vol.Required(CONF_NAME): str})
 
 
 def _build_add_zone_schema(exclude_entities: list[str] | None = None) -> vol.Schema:
@@ -77,6 +78,7 @@ class MultizoneMinisplitThermostatFlowHandler(config_entries.ConfigFlow, domain=
         self._entry_id: str | None = None
         self._zones: list[dict[str, Any]] = []
         self._preset_configs: dict[str, dict[str, float]] = {}
+        self._max_adjustment: float = DEFAULT_MAX_ADJUSTMENT
 
     async def async_step_import(
         self, user_input: dict[str, Any] | None = None
@@ -97,9 +99,7 @@ class MultizoneMinisplitThermostatFlowHandler(config_entries.ConfigFlow, domain=
 
     def _build_configure_description(self) -> str:
         """Build the status summary for the configure hub."""
-        lines = []
-
-        lines.append(f"**Zones ({len(self._zones)}):**")
+        lines = [f"**Zones ({len(self._zones)}):**"]
         if self._zones:
             for zone in self._zones:
                 entity_id = zone[CONF_ENTITY_ID]
@@ -112,11 +112,12 @@ class MultizoneMinisplitThermostatFlowHandler(config_entries.ConfigFlow, domain=
 
         preset_count = sum(
             1
-            for p in self._preset_configs.values()
-            if p.get("heat_temp") is not None or p.get("cool_temp") is not None
+            for preset in self._preset_configs.values()
+            if preset.get("heat_temp") is not None
+            or preset.get("cool_temp") is not None
         )
         lines.append(f"\n**Preset temperatures:** {preset_count} value(s) set")
-
+        lines.append(f"\n**Max adjustment:** {self._max_adjustment}°F")
         return "\n".join(lines)
 
     async def async_step_user(
@@ -130,9 +131,9 @@ class MultizoneMinisplitThermostatFlowHandler(config_entries.ConfigFlow, domain=
             self._entry_id = str(uuid.uuid4())
             await self.async_set_unique_id(self._entry_id)
             self._abort_if_unique_id_configured()
-
             self._zones = []
             self._preset_configs = {}
+            self._max_adjustment = DEFAULT_MAX_ADJUSTMENT
             return await self.async_step_configure()
 
         return self.async_show_form(
@@ -151,11 +152,13 @@ class MultizoneMinisplitThermostatFlowHandler(config_entries.ConfigFlow, domain=
             action = user_input.get("action")
             if action == "add_zone":
                 return await self.async_step_add_zone()
-            elif action == "remove_zone":
+            if action == "remove_zone":
                 return await self.async_step_remove_zone()
-            elif action == "preset_config":
+            if action == "preset_config":
                 return await self.async_step_preset_config()
-            elif action == "done":
+            if action == "max_adjustment":
+                return await self.async_step_max_adjustment()
+            if action == "done":
                 if not self._zones:
                     errors["action"] = "no_zones"
                 else:
@@ -174,6 +177,10 @@ class MultizoneMinisplitThermostatFlowHandler(config_entries.ConfigFlow, domain=
                                     {
                                         "value": "preset_config",
                                         "label": "Configure presets",
+                                    },
+                                    {
+                                        "value": "max_adjustment",
+                                        "label": "Max adjustment",
                                     },
                                     {"value": "done", "label": "Finish setup"},
                                 ],
@@ -201,7 +208,6 @@ class MultizoneMinisplitThermostatFlowHandler(config_entries.ConfigFlow, domain=
                     self._preset_configs[preset]["heat_temp"] = heat
                 if cool is not None:
                     self._preset_configs[preset]["cool_temp"] = cool
-
             return await self.async_step_configure()
 
         schema_dict = {}
@@ -220,6 +226,37 @@ class MultizoneMinisplitThermostatFlowHandler(config_entries.ConfigFlow, domain=
             data_schema=vol.Schema(schema_dict),
             errors=errors,
             description_placeholders={"presets": ", ".join(PRESETS)},
+        )
+
+    async def async_step_max_adjustment(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Configure maximum setpoint adjustment."""
+        if user_input is not None:
+            self._max_adjustment = user_input.get(
+                CONF_MAX_ADJUSTMENT, DEFAULT_MAX_ADJUSTMENT
+            )
+            return await self.async_step_configure()
+
+        return self.async_show_form(
+            step_id="max_adjustment",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_MAX_ADJUSTMENT, default=self._max_adjustment
+                    ): selector(
+                        {
+                            "number": {
+                                "min": MIN_MAX_ADJUSTMENT,
+                                "max": MAX_MAX_ADJUSTMENT,
+                                "step": STEP_MAX_ADJUSTMENT,
+                                "mode": "box",
+                                "unit_of_measurement": "°F",
+                            }
+                        }
+                    )
+                }
+            ),
         )
 
     async def async_step_add_zone(
@@ -274,11 +311,7 @@ class MultizoneMinisplitThermostatFlowHandler(config_entries.ConfigFlow, domain=
 
         return self.async_show_form(
             step_id="remove_zone",
-            data_schema=vol.Schema(
-                {
-                    vol.Required("zone_index"): vol.In(zone_options),
-                }
-            ),
+            data_schema=vol.Schema({vol.Required("zone_index"): vol.In(zone_options)}),
         )
 
     async def async_step_finalize(
@@ -289,11 +322,10 @@ class MultizoneMinisplitThermostatFlowHandler(config_entries.ConfigFlow, domain=
             CONF_NAME: self._name or "Multi-Zone Thermostat",
             CONF_ZONES: self._zones,
             CONF_PRESET_CONFIGS: self._preset_configs,
+            CONF_MAX_ADJUSTMENT: self._max_adjustment,
         }
-
         return self.async_create_entry(
-            title=self._name or "Multi-Zone Thermostat",
-            data=data,
+            title=self._name or "Multi-Zone Thermostat", data=data
         )
 
     @staticmethod
@@ -305,9 +337,7 @@ class MultizoneMinisplitThermostatFlowHandler(config_entries.ConfigFlow, domain=
         return MultizoneMinisplitThermostatOptionsFlowHandler()
 
 
-class MultizoneMinisplitThermostatOptionsFlowHandler(
-    config_entries.OptionsFlow,
-):
+class MultizoneMinisplitThermostatOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for reconfiguring the integration."""
 
     def __init__(self) -> None:
@@ -325,7 +355,7 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
     async def async_step_manage_zones(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manage zones - show summary and actions."""
+        """Manage zones."""
         merged = {**self.config_entry.data, **self.config_entry.options}
         if not self._zones:
             self._zones = [dict(z) for z in merged.get(CONF_ZONES, [])]
@@ -335,11 +365,11 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
             action = user_input.get("action")
             if action == "add":
                 return await self.async_step_add_zone()
-            elif action == "remove":
+            if action == "remove":
                 return await self.async_step_remove_zone()
-            elif action == "quiet_mode":
+            if action == "quiet_mode":
                 return await self.async_step_quiet_mode()
-            elif action == "temp_sensor":
+            if action == "temp_sensor":
                 return await self.async_step_temp_sensor()
             return await self.async_step_finalize()
 
@@ -422,7 +452,7 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
         """Remove a zone."""
         if user_input is not None:
             index = user_input.get("zone_index")
-            if index is not None and 0 <= index < len(self._zones):
+            if index is not None and 0 <= int(index) < len(self._zones):
                 self._zones.pop(int(index))
             return await self.async_step_manage_zones()
 
@@ -434,11 +464,7 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
 
         return self.async_show_form(
             step_id="remove_zone",
-            data_schema=vol.Schema(
-                {
-                    vol.Required("zone_index"): vol.In(zone_options),
-                }
-            ),
+            data_schema=vol.Schema({vol.Required("zone_index"): vol.In(zone_options)}),
         )
 
     async def async_step_quiet_mode(
@@ -454,19 +480,14 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
             entity_id = zone[CONF_ENTITY_ID]
             friendly = entity_id.split(".")[-1].replace("_", " ").title()
             quiet_entity = zone.get(CONF_QUIET_MODE_ENTITY)
-            if quiet_entity:
-                friendly += f" (quiet: {quiet_entity})"
-            else:
-                friendly += " (quiet: none)"
+            friendly += (
+                f" (quiet: {quiet_entity})" if quiet_entity else " (quiet: none)"
+            )
             zone_options[str(i)] = friendly
 
         return self.async_show_form(
             step_id="quiet_mode",
-            data_schema=vol.Schema(
-                {
-                    vol.Required("zone_index"): vol.In(zone_options),
-                }
-            ),
+            data_schema=vol.Schema({vol.Required("zone_index"): vol.In(zone_options)}),
         )
 
     async def async_step_quiet_mode_edit(
@@ -503,7 +524,7 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
                                 ]
                             }
                         }
-                    ),
+                    )
                 }
             ),
         )
@@ -521,19 +542,14 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
             entity_id = zone[CONF_ENTITY_ID]
             friendly = entity_id.split(".")[-1].replace("_", " ").title()
             temp_sensor = zone.get(CONF_TEMP_SENSOR_ENTITY_ID)
-            if temp_sensor:
-                friendly += f" (sensor: {temp_sensor})"
-            else:
-                friendly += " (sensor: none)"
+            friendly += (
+                f" (sensor: {temp_sensor})" if temp_sensor else " (sensor: none)"
+            )
             zone_options[str(i)] = friendly
 
         return self.async_show_form(
             step_id="temp_sensor",
-            data_schema=vol.Schema(
-                {
-                    vol.Required("zone_index"): vol.In(zone_options),
-                }
-            ),
+            data_schema=vol.Schema({vol.Required("zone_index"): vol.In(zone_options)}),
         )
 
     async def async_step_temp_sensor_edit(
@@ -559,7 +575,7 @@ class MultizoneMinisplitThermostatOptionsFlowHandler(
                 {
                     vol.Optional(
                         CONF_TEMP_SENSOR_ENTITY_ID, default=current_temp_sensor
-                    ): selector({"entity": {"domain": ["sensor", "number"]}}),
+                    ): selector({"entity": {"domain": ["sensor", "number"]}})
                 }
             ),
         )
