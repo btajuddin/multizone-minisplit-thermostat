@@ -17,13 +17,17 @@ from .const import (
     ATTR_ZONE,
     CONF_DEFAULT_PRESET,
     CONF_ENTITY_ID,
+    CONF_MAX_ADJUSTMENT,
     CONF_PRESET_CONFIGS,
     CONF_PRIORITY,
     CONF_QUIET_MODE_ENTITY,
     CONF_TEMP_SENSOR_ENTITY_ID,
     CONF_ZONES,
+    DEFAULT_MAX_ADJUSTMENT,
     DEFAULT_PRIORITY,
     DOMAIN,
+    MAX_MAX_ADJUSTMENT,
+    MIN_MAX_ADJUSTMENT,
     PRESETS,
     SERVICE_SET_ZONE_PRESET,
 )
@@ -33,7 +37,6 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = [Platform.SELECT, Platform.NUMBER, Platform.SENSOR, Platform.BINARY_SENSOR]
 
-# Per-preset temperature configuration schema (shared across all zones)
 PRESET_CONFIG_SCHEMA = vol.Schema(
     {
         vol.In(PRESETS): {
@@ -43,7 +46,6 @@ PRESET_CONFIG_SCHEMA = vol.Schema(
     }
 )
 
-# Per-zone configuration schema
 ZONE_CONFIG_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_ENTITY_ID): cv.entity_id,
@@ -54,23 +56,19 @@ ZONE_CONFIG_SCHEMA = vol.Schema(
     }
 )
 
-# Top-level integration schema
 INTEGRATION_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_NAME): cv.string,
         vol.Required(CONF_ZONES): vol.All(cv.ensure_list, [ZONE_CONFIG_SCHEMA]),
         vol.Optional(CONF_PRESET_CONFIGS, default={}): PRESET_CONFIG_SCHEMA,
+        vol.Optional(CONF_MAX_ADJUSTMENT, default=DEFAULT_MAX_ADJUSTMENT): vol.All(
+            vol.Coerce(float), vol.Range(min=MIN_MAX_ADJUSTMENT, max=MAX_MAX_ADJUSTMENT)
+        ),
     }
 )
 
 CONFIG_SCHEMA = vol.Schema(
-    {
-        DOMAIN: vol.Schema(
-            {
-                cv.slug: INTEGRATION_SCHEMA,
-            }
-        )
-    },
+    {DOMAIN: vol.Schema({cv.slug: INTEGRATION_SCHEMA})},
     extra=vol.ALLOW_EXTRA,
 )
 
@@ -115,16 +113,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             hass.config_entries.flow.async_init(
                 DOMAIN,
                 context={"source": "import"},
-                data={
-                    "entry_id": entry_id,
-                    **entry_config,
-                },
+                data={"entry_id": entry_id, **entry_config},
             )
         )
 
-    # Register services once at the integration level
     _async_register_services(hass)
-
     return True
 
 
@@ -134,26 +127,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = entry.data
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
-    # Merge entry.options (from reconfiguration) with entry.data (from initial setup)
     merged_data = {**entry.data, **entry.options}
     zone_configs = merged_data.get(CONF_ZONES, [])
     preset_configs = merged_data.get(CONF_PRESET_CONFIGS, {})
+    max_adjustment = merged_data.get(CONF_MAX_ADJUSTMENT, DEFAULT_MAX_ADJUSTMENT)
 
     coordinator = MiniSplitThermostatCoordinator(
         hass=hass,
         entry=entry,
         zone_configs=zone_configs,
         preset_configs=preset_configs,
+        max_adjustment=max_adjustment,
     )
     _register_coordinator(coordinator)
     coordinator.setup_state_listeners()
 
-    # Determine mode and synchronize all zones on startup
     await coordinator.async_check_and_update_mode()
     await coordinator.async_sync_zones()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
     return True
 
 
@@ -166,7 +158,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             coordinator.cleanup()
         _unregister_coordinator(entry.entry_id)
         hass.data[DOMAIN].pop(entry.entry_id, None)
-
     return unload_ok
 
 

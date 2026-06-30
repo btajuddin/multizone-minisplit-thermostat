@@ -27,6 +27,13 @@
           "failsafe_cool_temp": "Failsafe - Cooling Target"
         }
       },
+      "max_adjustment": {
+        "title": "Max Adjustment",
+        "description": "Set the maximum setpoint adjustment applied in the active HVAC direction.",
+        "data": {
+          "max_adjustment": "Max Adjustment"
+        }
+      },
       "add_zone": {
         "title": "Add Climate Zone",
         "description": "Add a climate zone to this thermostat group.",
@@ -164,6 +171,14 @@
       },
       "zone_priority": {
         "name": "Zone Priority"
+      },
+      "max_adjustment": {
+        "name": "Max Adjustment"
+      }
+    },
+    "sensor": {
+      "actual_setpoint": {
+        "name": "Actual Setpoint"
       }
     }
   }

@@ -9,11 +9,7 @@ from typing import Any
 
 from homeassistant.components.climate import HVACMode
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    CONF_NAME,
-    STATE_UNAVAILABLE,
-    STATE_UNKNOWN,
-)
+from homeassistant.const import CONF_NAME, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import (
     async_track_state_change_event,
@@ -22,22 +18,26 @@ from homeassistant.helpers.event import (
 
 from .const import (
     ATTR_ZONE_PRESETS,
+    AUTOMATIC_MODE_COOLDOWN,
     CONF_DEFAULT_PRESET,
     CONF_ENTITY_ID,
+    CONF_MAX_ADJUSTMENT,
     CONF_PRESET_CONFIGS,
     CONF_PRIORITY,
     CONF_QUIET_MODE_ENTITY,
     CONF_TEMP_SENSOR_ENTITY_ID,
     CONF_ZONES,
     DEFAULT_COOL_TEMP,
+    DEFAULT_DEBOUNCE_INTERVAL,
+    DEFAULT_DEBOUNCE_THRESHOLD,
     DEFAULT_HEAT_TEMP,
+    DEFAULT_MAX_ADJUSTMENT,
     DEFAULT_PRIORITY,
     PRESET_COMFORT,
     PRESETS,
-    AUTOMATIC_MODE_COOLDOWN,
-    TEMPERATURE_TOLERANCE,
     RECONCILE_INTERVAL,
     RECONCILE_TEMP_TOLERANCE,
+    TEMPERATURE_TOLERANCE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -52,34 +52,33 @@ class MiniSplitThermostatCoordinator:
         entry: ConfigEntry,
         zone_configs: list[dict[str, Any]],
         preset_configs: dict[str, dict[str, float]],
+        max_adjustment: float = DEFAULT_MAX_ADJUSTMENT,
+        debounce_interval: int = DEFAULT_DEBOUNCE_INTERVAL,
+        debounce_threshold: float = DEFAULT_DEBOUNCE_THRESHOLD,
     ) -> None:
         """Initialize the coordinator."""
         self.hass = hass
         self.entry_id = entry.entry_id
-        # Get name from config data, entry title, or fallback
-        name = entry.data.get(CONF_NAME)
-        if not name:
-            name = entry.title
-        if not name:
-            name = "Multi-Zone Thermostat"
+        name = entry.data.get(CONF_NAME) or entry.title or "Multi-Zone Thermostat"
         self._entry_name = name
-        # Restore mode from options, or determine on startup
         stored_mode = entry.options.get("mode")
-        self._hvac_mode: HVACMode | None = (
-            HVACMode(stored_mode) if stored_mode else None
-        )
+        self._hvac_mode = HVACMode(stored_mode) if stored_mode else None
         self.zone_configs = zone_configs
         self._preset_configs: dict[str, dict[str, float]] = preset_configs
-        # Restore per-zone preset selections from options, falling back to
-        # each zone's configured default for zones that have no stored value.
         stored_zone_presets: dict[str, str] = entry.options.get(ATTR_ZONE_PRESETS, {})
         self._zone_presets: dict[str, str] = dict(stored_zone_presets)
         self._auto_mode: bool = False
         self._select_entities: list[Any] = []
         self._number_entities: list[Any] = []
+        self._sensor_entities: list[Any] = []
         self._remove_trackers: list[Any] = []
         self._remove_reconcile_tracker = None
         self._last_auto_mode_change: float = 0.0
+        self._debounce_interval = debounce_interval
+        self._debounce_threshold = debounce_threshold
+        self._max_adjustment = max_adjustment
+        self._last_temp_adjust_time: dict[str, float] = {}
+        self._last_actual_setpoint: dict[str, float] = {}
 
         for zone_config in zone_configs:
             entity_id = zone_config[CONF_ENTITY_ID]
@@ -87,6 +86,7 @@ class MiniSplitThermostatCoordinator:
                 self._zone_presets[entity_id] = zone_config.get(
                     CONF_DEFAULT_PRESET, PRESET_COMFORT
                 )
+            self._last_temp_adjust_time[entity_id] = 0.0
 
     @property
     def entity_presets(self) -> dict[str, str]:
@@ -103,6 +103,18 @@ class MiniSplitThermostatCoordinator:
         """Return the thermostat name."""
         return self._entry_name
 
+    @property
+    def max_adjustment(self) -> float:
+        """Return the maximum setpoint adjustment."""
+        return self._max_adjustment
+
+    async def async_set_max_adjustment(self, value: float) -> None:
+        """Update the maximum setpoint adjustment."""
+        self._max_adjustment = value
+        await self._persist_option(CONF_MAX_ADJUSTMENT, value)
+        self._notify_state_changed()
+        await self.async_push_temperatures()
+
     def add_select_entity(self, entity: Any) -> None:
         """Register a select entity for state update callbacks."""
         self._select_entities.append(entity)
@@ -111,8 +123,12 @@ class MiniSplitThermostatCoordinator:
         """Register a number entity for state update callbacks."""
         self._number_entities.append(entity)
 
+    def add_sensor_entity(self, entity: Any) -> None:
+        """Register a sensor entity for state update callbacks."""
+        self._sensor_entities.append(entity)
+
     def get_preset_temp(self, preset: str, mode: str) -> float:
-        """Get the target temperature for a preset and mode (heat/cool)."""
+        """Get the target temperature for a preset and mode."""
         preset_config = self._preset_configs.get(preset, {})
         if mode == "heat":
             return preset_config.get("heat_temp", DEFAULT_HEAT_TEMP)
@@ -130,58 +146,97 @@ class MiniSplitThermostatCoordinator:
 
     def is_quiet_mode_active(self, entity_id: str) -> bool:
         """Check if quiet mode is active for a zone."""
-        zone_config = None
-        for zc in self.zone_configs:
-            if zc[CONF_ENTITY_ID] == entity_id:
-                zone_config = zc
-                break
-
+        zone_config = next(
+            (zc for zc in self.zone_configs if zc[CONF_ENTITY_ID] == entity_id), None
+        )
         if zone_config is None:
             return False
-
         quiet_entity = zone_config.get(CONF_QUIET_MODE_ENTITY)
         if quiet_entity is None:
             return False
-
         state = self.hass.states.get(quiet_entity)
         if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             return False
-
         return state.state.lower() == "on"
 
     def get_active_preset(self, entity_id: str) -> str:
         """Get the active preset for a zone."""
         return self._zone_presets.get(entity_id, PRESET_COMFORT)
 
-    async def async_push_temperatures(self) -> None:
-        """Push the current target temperatures to all underlying thermostats.
+    def get_desired_target(self, entity_id: str) -> float:
+        """Get the desired target temperature for a zone."""
+        if self._hvac_mode == HVACMode.HEAT:
+            return self._get_heat_target(entity_id)
+        return self._get_cool_target(entity_id)
 
-        Respects quiet mode settings.
-        """
-        for zone_config in self.zone_configs:
-            entity_id = zone_config[CONF_ENTITY_ID]
-            base_target = self.get_target_temp(entity_id)
+    def get_target_temp(self, entity_id: str) -> float:
+        """Get the desired target temperature for a zone."""
+        return self.get_desired_target(entity_id)
 
-            # Check quiet mode: if active, only push if temperature would change
-            # to the same value the mini-split already has (avoid beeping)
-            if self.is_quiet_mode_active(entity_id):
-                zone_state = self.get_zone_state(entity_id)
-                if zone_state is not None:
-                    current_ms_temp = zone_state.get("temperature")
-                    if current_ms_temp is not None:
-                        try:
-                            current_ms_temp = float(current_ms_temp)
-                            # Only push if significantly different
-                            if abs(base_target - current_ms_temp) < 0.5:
-                                continue
-                        except (ValueError, TypeError):
-                            pass
+    def get_actual_setpoint(self, entity_id: str) -> float:
+        """Get the most recent actual setpoint for a zone."""
+        return self._last_actual_setpoint.get(
+            entity_id, self.get_desired_target(entity_id)
+        )
 
-            await self.hass.services.async_call(
-                "climate",
-                "set_temperature",
-                {"entity_id": entity_id, "temperature": base_target},
+    def compute_adjusted_setpoint(self, entity_id: str) -> float | None:
+        """Compute the setpoint to push to an underlying thermostat."""
+        desired = self.get_desired_target(entity_id)
+        measured = self._get_zone_current_temperature(entity_id)
+        if measured is None:
+            return desired
+        max_adjustment = max(0.0, self._max_adjustment)
+        if self._hvac_mode == HVACMode.HEAT:
+            adjustment = max(0.0, min(max_adjustment, desired - measured))
+        elif self._hvac_mode == HVACMode.COOL:
+            adjustment = -max(0.0, min(max_adjustment, measured - desired))
+        else:
+            return None
+        return desired + adjustment
+
+    def _should_push_actual_setpoint(
+        self, entity_id: str, actual_setpoint: float
+    ) -> bool:
+        """Return whether a setpoint write passes debounce checks."""
+        last_setpoint = self._last_actual_setpoint.get(entity_id)
+        if last_setpoint is None:
+            return True
+        if abs(actual_setpoint - last_setpoint) < self._debounce_threshold:
+            return False
+        return (
+            time.time() - self._last_temp_adjust_time.get(entity_id, 0.0)
+            >= self._debounce_interval
+        )
+
+    async def _async_push_actual_setpoint(
+        self, entity_id: str, force: bool = False
+    ) -> None:
+        """Push the computed actual setpoint to an underlying thermostat."""
+        actual_setpoint = self.compute_adjusted_setpoint(entity_id)
+        if actual_setpoint is None:
+            return
+        if self.is_quiet_mode_active(entity_id):
+            _LOGGER.debug(
+                "Skipping temperature push for %s (quiet mode active)", entity_id
             )
+            return
+        if not force and not self._should_push_actual_setpoint(
+            entity_id, actual_setpoint
+        ):
+            return
+        await self.hass.services.async_call(
+            "climate",
+            "set_temperature",
+            {"entity_id": entity_id, "temperature": actual_setpoint},
+        )
+        self._last_actual_setpoint[entity_id] = actual_setpoint
+        self._last_temp_adjust_time[entity_id] = time.time()
+        self._notify_state_changed()
+
+    async def async_push_temperatures(self) -> None:
+        """Push the current adjusted temperatures to all underlying thermostats."""
+        for zone_config in self.zone_configs:
+            await self._async_push_actual_setpoint(zone_config[CONF_ENTITY_ID])
 
     async def async_sync_zones(self) -> None:
         """Synchronize all underlying thermostats with current mode and temperatures."""
@@ -193,41 +248,17 @@ class MiniSplitThermostatCoordinator:
 
         for zone_config in self.zone_configs:
             entity_id = zone_config[CONF_ENTITY_ID]
-
-            # Skip temperature sync if quiet mode is active
-            if self.is_quiet_mode_active(entity_id):
-                _LOGGER.debug(
-                    "Skipping zone sync for %s (quiet mode active)", entity_id
-                )
-                await self.hass.services.async_call(
-                    "climate",
-                    "set_hvac_mode",
-                    {"entity_id": entity_id, "hvac_mode": self._hvac_mode.value},
-                )
-                continue
-
             await self.hass.services.async_call(
                 "climate",
                 "set_hvac_mode",
                 {"entity_id": entity_id, "hvac_mode": self._hvac_mode.value},
             )
-            target_temp = self.get_target_temp(entity_id)
-            await self.hass.services.async_call(
-                "climate",
-                "set_temperature",
-                {"entity_id": entity_id, "temperature": target_temp},
-            )
+            await self._async_push_actual_setpoint(entity_id, force=True)
 
         self._last_auto_mode_change = time.time()
 
     async def async_reconcile_zones(self) -> None:
-        """Reconcile underlying climate entities with expected state.
-
-        Runs periodically. For each zone, checks that the HVAC mode and
-        setpoint match what the integration expects. If they diverge
-        (e.g. someone adjusted the mini-split directly), pushes the
-        correct values.
-        """
+        """Reconcile underlying climate entities with expected state."""
         if self._hvac_mode is None:
             return
 
@@ -251,9 +282,12 @@ class MiniSplitThermostatCoordinator:
                     {"entity_id": entity_id, "hvac_mode": expected_mode},
                 )
 
+            if self.is_quiet_mode_active(entity_id):
+                continue
+
             current_temp = state.attributes.get("temperature")
-            expected_temp = self.get_target_temp(entity_id)
-            if current_temp is None:
+            expected_temp = self.compute_adjusted_setpoint(entity_id)
+            if current_temp is None or expected_temp is None:
                 continue
 
             try:
@@ -268,11 +302,7 @@ class MiniSplitThermostatCoordinator:
                     current_temp,
                     expected_temp,
                 )
-                await self.hass.services.async_call(
-                    "climate",
-                    "set_temperature",
-                    {"entity_id": entity_id, "temperature": expected_temp},
-                )
+                await self._async_push_actual_setpoint(entity_id, force=True)
 
     async def _persist_option(self, key: str, value: Any) -> None:
         """Persist a single option to the config entry options if changed."""
@@ -294,6 +324,8 @@ class MiniSplitThermostatCoordinator:
             select_entity.async_write_ha_state()
         for number_entity in self._number_entities:
             number_entity.async_write_ha_state()
+        for sensor_entity in self._sensor_entities:
+            sensor_entity.async_write_ha_state()
 
     async def async_request_ha_state_update(self) -> None:
         """Request all registered entities to update their HA state."""
@@ -351,14 +383,8 @@ class MiniSplitThermostatCoordinator:
                 self._notify_state_changed()
                 return
 
-    def get_target_temp(self, entity_id: str) -> float:
-        """Get the target temperature for a zone based on its preset and mode."""
-        if self._hvac_mode == HVACMode.HEAT:
-            return self._get_heat_target(entity_id)
-        return self._get_cool_target(entity_id)
-
     def get_all_target_temps(self) -> dict[str, float]:
-        """Get target temperatures for all zones."""
+        """Get desired target temperatures for all zones."""
         return {
             entity_id: self.get_target_temp(entity_id)
             for entity_id in self._zone_presets
@@ -379,14 +405,12 @@ class MiniSplitThermostatCoordinator:
 
     def _get_zone_current_temperature(self, entity_id: str) -> float | None:
         """Get the current temperature for a zone, using override sensor if configured."""
-        # Find zone config
         zone_config = next(
             (z for z in self.zone_configs if z[CONF_ENTITY_ID] == entity_id), None
         )
         if zone_config is None:
             return None
 
-        # Check for override sensor
         temp_sensor_id = zone_config.get(CONF_TEMP_SENSOR_ENTITY_ID)
         if temp_sensor_id:
             state = self.hass.states.get(temp_sensor_id)
@@ -399,7 +423,6 @@ class MiniSplitThermostatCoordinator:
                 except (ValueError, TypeError):
                     pass
 
-        # Fallback to climate entity's current_temperature
         zone_state = self.get_zone_state(entity_id)
         if zone_state is not None:
             current_temp = zone_state.get("current_temperature")
@@ -411,13 +434,7 @@ class MiniSplitThermostatCoordinator:
         return None
 
     def determine_hvac_mode(self) -> HVACMode | None:
-        """Determine the appropriate HVAC mode based on zone temperatures.
-
-        Returns the mode that should be set, or None if no change is needed.
-        If zones conflict, the highest priority zone wins.
-
-        NOTE: This runs even during quiet mode - mode switching is NOT blocked.
-        """
+        """Determine the appropriate HVAC mode based on zone temperatures."""
         if not self._auto_mode:
             return None
 
@@ -427,7 +444,6 @@ class MiniSplitThermostatCoordinator:
         for zone_config in self.zone_configs:
             entity_id = zone_config[CONF_ENTITY_ID]
             priority = zone_config.get(CONF_PRIORITY, DEFAULT_PRIORITY)
-
             current_temp = self._get_zone_current_temperature(entity_id)
             if current_temp is None:
                 continue
@@ -451,7 +467,6 @@ class MiniSplitThermostatCoordinator:
             return HVACMode.HEAT
         if cool_zones:
             return HVACMode.COOL
-
         return None
 
     async def async_check_and_update_mode(self) -> None:
@@ -478,14 +493,7 @@ class MiniSplitThermostatCoordinator:
                 "set_hvac_mode",
                 {"entity_id": entity_id, "hvac_mode": determined_mode},
             )
-            # Only push temperature if not in quiet mode
-            if not self.is_quiet_mode_active(entity_id):
-                target_temp = self.get_target_temp(entity_id)
-                await self.hass.services.async_call(
-                    "climate",
-                    "set_temperature",
-                    {"entity_id": entity_id, "temperature": target_temp},
-                )
+            await self._async_push_actual_setpoint(entity_id, force=True)
 
         self._last_auto_mode_change = time.time()
         self._notify_state_changed()
@@ -495,13 +503,11 @@ class MiniSplitThermostatCoordinator:
         """Set up state change listeners for underlying zones."""
         entity_ids = [z[CONF_ENTITY_ID] for z in self.zone_configs]
 
-        # Track quiet mode entities if configured
         for zone_config in self.zone_configs:
             quiet_entity = zone_config.get(CONF_QUIET_MODE_ENTITY)
             if quiet_entity:
                 entity_ids.append(quiet_entity)
 
-        # Track temperature sensor entities if configured
         for zone_config in self.zone_configs:
             temp_sensor = zone_config.get(CONF_TEMP_SENSOR_ENTITY_ID)
             if temp_sensor:
@@ -511,6 +517,9 @@ class MiniSplitThermostatCoordinator:
         def _async_state_changed(event: Any) -> None:
             """Handle state change events."""
             self.hass.async_create_task(self.async_check_and_update_mode())
+            changed_entity = event.data.get("entity_id")
+            if changed_entity in entity_ids:
+                self.hass.async_create_task(self.async_push_temperatures())
             self._notify_state_changed()
 
         tracker = async_track_state_change_event(
