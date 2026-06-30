@@ -27,12 +27,11 @@
           "failsafe_cool_temp": "Failsafe - Cooling Target"
         }
       },
-      "outside_temp": {
-        "title": "Outside Temperature Sensor",
-        "description": "Optionally select an outside temperature sensor to enable offset learning.",
+      "max_adjustment": {
+        "title": "Max Adjustment",
+        "description": "Set the maximum setpoint adjustment applied in the active HVAC direction.",
         "data": {
-          "outside_temp_entity": "Outside Temperature Entity",
-          "enable_offset_learning": "Enable Offset Learning"
+          "max_adjustment": "Max Adjustment"
         }
       },
       "add_zone": {
@@ -42,15 +41,8 @@
           "entity_id": "Climate Zone Entity ID",
           "default_preset": "Default Preset",
           "priority": "Zone Priority (higher = more important for mode decisions)",
-          "quiet_mode_entity": "Quiet Mode Entity"
-        }
-      },
-      "debounce_config": {
-        "title": "Debounce Settings",
-        "description": "Configure debounce interval and threshold for temperature adjustments.",
-        "data": {
-          "debounce_interval": "Debounce Interval",
-          "debounce_threshold": "Debounce Threshold"
+          "quiet_mode_entity": "Quiet Mode Entity",
+          "temp_sensor_entity_id": "Temperature Sensor Override"
         }
       },
       "remove_zone": {
@@ -94,7 +86,8 @@
           "entity_id": "Climate Zone Entity ID",
           "default_preset": "Default Preset",
           "priority": "Zone Priority (higher = more important for mode decisions)",
-          "quiet_mode_entity": "Quiet Mode Entity"
+          "quiet_mode_entity": "Quiet Mode Entity",
+          "temp_sensor_entity_id": "Temperature Sensor Override"
         }
       },
       "remove_zone": {
@@ -102,29 +95,6 @@
         "description": "Select a zone to remove from this thermostat group.",
         "data": {
           "zone_index": "Zone to remove"
-        }
-      },
-      "outside_temp": {
-        "title": "Outside Temperature Sensor",
-        "description": "Select the outside temperature sensor for offset learning.",
-        "data": {
-          "outside_temp_entity": "Outside Temperature Entity"
-        }
-      },
-      "debounce_config": {
-        "title": "Debounce Settings",
-        "description": "Configure debounce interval and threshold for temperature adjustments.",
-        "data": {
-          "debounce_interval": "Debounce Interval",
-          "debounce_threshold": "Debounce Threshold"
-        }
-      },
-      "offset_learning": {
-        "title": "Offset Learning",
-        "description": "Configure offset learning settings.",
-        "data": {
-          "outside_temp_entity": "Outside Temperature Entity",
-          "enable_offset_learning": "Enable Offset Learning"
         }
       },
       "quiet_mode": {
@@ -139,6 +109,20 @@
         "description": "Configure the quiet mode entity for the selected zone. When this entity is 'on', temperature adjustments are suppressed to avoid beeping.",
         "data": {
           "quiet_mode_entity": "Quiet Mode Entity"
+        }
+      },
+      "temp_sensor": {
+        "title": "Temperature Sensor Override",
+        "description": "Select a zone to configure its temperature sensor override.",
+        "data": {
+          "zone_index": "Zone"
+        }
+      },
+      "temp_sensor_edit": {
+        "title": "Temperature Sensor Override",
+        "description": "Configure the temperature sensor used for setpoint adjustment for the selected zone.",
+        "data": {
+          "temp_sensor_entity_id": "Temperature Sensor Override"
         }
       }
     },
@@ -158,26 +142,6 @@
         "preset": {
           "name": "Preset",
           "description": "The preset to apply (comfort, eco, or failsafe)."
-        }
-      }
-    },
-    "recalculate_offsets": {
-      "name": "Recalculate Offsets",
-      "description": "Force recalculation of learned temperature offsets.",
-      "fields": {
-        "zone": {
-          "name": "Zone",
-          "description": "Optional: specific zone entity to recalculate. Leave empty for all zones."
-        }
-      }
-    },
-    "clear_offset_history": {
-      "name": "Clear Offset History",
-      "description": "Clear learned offset data.",
-      "fields": {
-        "zone": {
-          "name": "Zone",
-          "description": "Optional: specific zone entity to clear. Leave empty for all zones."
         }
       }
     }
@@ -208,24 +172,13 @@
       "zone_priority": {
         "name": "Zone Priority"
       },
-      "debounce_interval": {
-        "name": "Debounce Interval"
-      },
-      "debounce_threshold": {
-        "name": "Debounce Threshold"
+      "max_adjustment": {
+        "name": "Max Adjustment"
       }
     },
     "sensor": {
-      "learned_offset": {
-        "name": "Learned Offset"
-      },
-      "offset_samples": {
-        "name": "Offset Samples"
-      }
-    },
-    "switch": {
-      "offset_learning": {
-        "name": "Offset Learning"
+      "actual_setpoint": {
+        "name": "Actual Setpoint"
       }
     }
   }

@@ -4,66 +4,44 @@ from homeassistant.components.climate import HVACMode
 
 DOMAIN = "multizone_minisplit_thermostat"
 
-# Preset names
 PRESET_COMFORT = "comfort"
 PRESET_ECO = "eco"
 PRESET_FAILSAFE = "failsafe"
 PRESETS = [PRESET_COMFORT, PRESET_ECO, PRESET_FAILSAFE]
 
-# Supported HVAC modes
 HVAC_MODES = [HVACMode.HEAT, HVACMode.COOL]
 
-# Configuration keys
 CONF_ZONES = "zones"
 CONF_ENTITY_ID = "entity_id"
 CONF_PRESET_CONFIGS = "presets"
 CONF_DEFAULT_PRESET = "default_preset"
 CONF_PRIORITY = "priority"
-
-# Optional temperature sensor entity ID to override the zone's temperature source
 CONF_TEMP_SENSOR_ENTITY_ID = "temp_sensor_entity_id"
-
-# Per-preset temperature keys (shared across all zones)
 CONF_HEAT_TEMP = "heat_temp"
 CONF_COOL_TEMP = "cool_temp"
+CONF_QUIET_MODE_ENTITY = "quiet_mode_entity"
+CONF_DEBOUNCE_INTERVAL = "debounce_interval"
+CONF_DEBOUNCE_THRESHOLD = "debounce_threshold"
+CONF_MAX_ADJUSTMENT = "max_adjustment"
 
-# Zone attribute keys
 ATTR_ZONE_PRESETS = "zone_presets"
 ATTR_ZONE_TARGET_TEMPS = "zone_target_temps"
 
-# Service constants
 SERVICE_SET_ZONE_PRESET = "set_zone_preset"
 ATTR_ZONE = "zone"
 ATTR_PRESET = "preset"
 
-# Defaults
 DEFAULT_HEAT_TEMP = 68.0
 DEFAULT_COOL_TEMP = 74.0
 DEFAULT_PRIORITY = 0
+DEFAULT_DEBOUNCE_INTERVAL = 900
+DEFAULT_DEBOUNCE_THRESHOLD = 0.5
+DEFAULT_MAX_ADJUSTMENT = 3.0
+MIN_MAX_ADJUSTMENT = 0.0
+MAX_MAX_ADJUSTMENT = 5.0
+STEP_MAX_ADJUSTMENT = 0.1
 
-# Auto mode control
-TEMPERATURE_TOLERANCE = 1.0  # degrees F before triggering mode change
-
-AUTOMATIC_MODE_COOLDOWN = 300  # 5 minutes in seconds
-
-# Offset learning and quiet mode configuration keys
-CONF_OUTSIDE_TEMP_ENTITY = "outside_temp_entity"
-CONF_QUIET_MODE_ENTITY = "quiet_mode_entity"
-CONF_DEBOUNCE_INTERVAL = "debounce_interval"
-CONF_DEBOUNCE_THRESHOLD = "debounce_threshold"
-CONF_ENABLE_OFFSET_LEARNING = "enable_offset_learning"
-
-# Offset learning and debounce defaults
-DEFAULT_DEBOUNCE_INTERVAL = 900  # 15 minutes in seconds
-DEFAULT_DEBOUNCE_THRESHOLD = 0.5  # degrees F
-OFFSET_LEARNING_WINDOW = 2592000  # 30 days in seconds
-OFFSET_RECALC_INTERVAL = 300  # recalculate every 5 minutes
-OFFSET_MAX_VALUE = 5.0  # maximum absolute offset in degrees F (clamp)
-
-# Service constants
-SERVICE_RECALCULATE_OFFSETS = "recalculate_offsets"
-SERVICE_CLEAR_OFFSET_HISTORY = "clear_offset_history"
-
-# Reconciliation
+TEMPERATURE_TOLERANCE = 1.0
+AUTOMATIC_MODE_COOLDOWN = 300
 RECONCILE_INTERVAL = 60
 RECONCILE_TEMP_TOLERANCE = 0.5
