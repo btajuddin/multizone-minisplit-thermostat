@@ -510,7 +510,7 @@ class MiniSplitThermostatCoordinator:
         @callback
         def _async_state_changed(event: Any) -> None:
             """Handle state change events."""
-            self.hass.async_create_task(self.async_check_and_update_mode())
+            self.hass.add_job(self.async_check_and_update_mode())
             self._notify_state_changed()
 
         tracker = async_track_state_change_event(
@@ -520,7 +520,7 @@ class MiniSplitThermostatCoordinator:
 
         self._remove_reconcile_tracker = async_track_time_interval(
             self.hass,
-            lambda _: self.hass.async_create_task(self.async_reconcile_zones()),
+            lambda _: self.hass.add_job(self.async_reconcile_zones()),
             timedelta(seconds=RECONCILE_INTERVAL),
         )
 
