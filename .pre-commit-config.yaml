@@ -35,3 +35,6 @@ repos:
           - --pretty
           - --show-error-codes
           - --show-error-context
+        additional_dependencies:
+          - homeassistant
+          - voluptuous

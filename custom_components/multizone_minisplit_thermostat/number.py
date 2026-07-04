@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory, UnitOfTemperature
@@ -11,14 +13,7 @@ from homeassistant.helpers.entity import async_generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
-    CONF_DEBOUNCE_INTERVAL,
-    CONF_DEBOUNCE_THRESHOLD,
     CONF_ENTITY_ID,
-    CONF_PRIORITY,
-    CONF_ZONES,
-    DEFAULT_DEBOUNCE_INTERVAL,
-    DEFAULT_DEBOUNCE_THRESHOLD,
-    DEFAULT_PRIORITY,
     DOMAIN,
     PRESETS,
 )
@@ -39,7 +34,7 @@ async def async_setup_entry(
     if coordinator is None:
         return
 
-    entities = []
+    entities: list[Any] = []
 
     # Create preset temperature numbers
     for preset in PRESETS:
@@ -61,15 +56,6 @@ async def async_setup_entry(
         )
         coordinator.add_number_entity(priority_entity)
         entities.append(priority_entity)
-
-    # Create debounce configuration entities (global)
-    debounce_interval_entity = DebounceIntervalNumber(coordinator=coordinator)
-    coordinator.add_number_entity(debounce_interval_entity)
-    entities.append(debounce_interval_entity)
-
-    debounce_threshold_entity = DebounceThresholdNumber(coordinator=coordinator)
-    coordinator.add_number_entity(debounce_threshold_entity)
-    entities.append(debounce_threshold_entity)
 
     async_add_entities(entities)
 
@@ -146,7 +132,7 @@ class ZonePriorityNumber(NumberEntity):
         self._attr_name = f"{zone_name} Priority"
         self._attr_unique_id = f"{coordinator.entry_id}_priority_{entity_id}"
         self.entity_id = async_generate_entity_id(
-            "number.{}",
+            NUMBER_ENTITY_ID_FORMAT,
             f"{coordinator.entry_name}_{zone_name}_priority",
             hass=coordinator.hass,
         )
@@ -166,87 +152,3 @@ class ZonePriorityNumber(NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Update the priority."""
         await self.coordinator.async_set_zone_priority(self._entity_id, int(value))
-
-
-class DebounceIntervalNumber(NumberEntity):
-    """Number entity for controlling the debounce interval (seconds)."""
-
-    _attr_has_entity_name = True
-    _attr_entity_category = EntityCategory.CONFIG
-    _attr_native_min_value = 60
-    _attr_native_max_value = 3600
-    _attr_native_step = 60
-    _attr_mode = NumberMode.BOX
-    _attr_native_unit_of_measurement = "s"
-
-    def __init__(
-        self,
-        coordinator: MiniSplitThermostatCoordinator,
-    ) -> None:
-        """Initialize the debounce interval number entity."""
-        self.coordinator = coordinator
-
-        self._attr_name = "Debounce Interval"
-        self._attr_unique_id = f"{coordinator.entry_id}_debounce_interval"
-        self.entity_id = async_generate_entity_id(
-            NUMBER_ENTITY_ID_FORMAT,
-            f"{coordinator.entry_name}_debounce_interval",
-            hass=coordinator.hass,
-        )
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.entry_id)},
-            name=coordinator.entry_name,
-            manufacturer="Multi-Zone Mini-Split Thermostat",
-            model="Virtual Thermostat",
-        )
-
-    @property
-    def native_value(self) -> int:
-        """Return the current debounce interval."""
-        return self.coordinator._debounce_interval
-
-    async def async_set_native_value(self, value: float) -> None:
-        """Update the debounce interval."""
-        await self.coordinator.async_set_debounce_interval(int(value))
-
-
-class DebounceThresholdNumber(NumberEntity):
-    """Number entity for controlling the debounce threshold (degrees F)."""
-
-    _attr_has_entity_name = True
-    _attr_entity_category = EntityCategory.CONFIG
-    _attr_native_min_value = 0.1
-    _attr_native_max_value = 5.0
-    _attr_native_step = 0.1
-    _attr_mode = NumberMode.BOX
-    _attr_native_unit_of_measurement = UnitOfTemperature.FAHRENHEIT
-
-    def __init__(
-        self,
-        coordinator: MiniSplitThermostatCoordinator,
-    ) -> None:
-        """Initialize the debounce threshold number entity."""
-        self.coordinator = coordinator
-
-        self._attr_name = "Debounce Threshold"
-        self._attr_unique_id = f"{coordinator.entry_id}_debounce_threshold"
-        self.entity_id = async_generate_entity_id(
-            NUMBER_ENTITY_ID_FORMAT,
-            f"{coordinator.entry_name}_debounce_threshold",
-            hass=coordinator.hass,
-        )
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.entry_id)},
-            name=coordinator.entry_name,
-            manufacturer="Multi-Zone Mini-Split Thermostat",
-            model="Virtual Thermostat",
-        )
-
-    @property
-    def native_value(self) -> float:
-        """Return the current debounce threshold."""
-        return self.coordinator._debounce_threshold
-
-    async def async_set_native_value(self, value: float) -> None:
-        """Update the debounce threshold."""
-        await self.coordinator.async_set_debounce_threshold(value)
